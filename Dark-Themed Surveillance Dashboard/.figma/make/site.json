@@ -1,0 +1,10 @@
+{
+  "description": "Monitor real-time traffic and vehicle data with an advanced dark-themed dashboard featuring live video feeds, ANPR capabilities, and analytics for security professionals.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

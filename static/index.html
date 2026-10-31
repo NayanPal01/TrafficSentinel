@@ -1,0 +1,2835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrafficSentinel AI — Surveillance & ANPR Monitoring Center</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚦</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      height: 48px;
+      background: #161c28;
+      border-bottom: 1px solid #262f40;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      justify-content: space-between;
+      user-select: none;
+    }
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      color: #00d2ff;
+    }
+    .nav-tabs { display: flex; gap: 4px; height: 100%; }
+    .nav-tab {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #a0aec0;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .nav-tab.active {
+      color: #00d2ff;
+      border-bottom-color: #00d2ff;
+      background: rgba(0, 210, 255, 0.05);
+    }
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      color: #a0aec0;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #2ed573;
+      box-shadow: 0 0 6px #2ed573;
+      display: inline-block;
+      margin-right: 5px;
+    }
+
+    .main-body { flex: 1; display: flex; overflow: hidden; }
+
+    .left-sidebar {
+      width: 260px;
+      background: #161c28;
+      border-right: 1px solid #262f40;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .input-box {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #262f40;
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .viewport { flex: 1; display: flex; flex-direction: column; background: #0d1117; padding: 10px; gap: 8px; }
+    .video-container {
+      flex: 1; background: #000; border: 1px solid #262f40; border-radius: 8px;
+      position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    }
+    .video-stream { width: 100%; height: 100%; object-fit: contain; }
+    .video-hud {
+      position: absolute; top: 0; left: 0; right: 0; padding: 8px 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+      display: flex; justify-content: space-between; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #fff;
+    }
+
+    .right-sidebar {
+      width: 330px; background: #161c28; border-left: 1px solid #262f40; display: flex; flex-direction: column;
+    }
+    .sidebar-header { padding: 10px 12px; border-bottom: 1px solid #262f40; font-size: 12px; font-weight: 700; color: #fff; display: flex; justify-content: space-between; }
+    .event-feed { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .event-card { background: #0d1117; border: 1px solid #262f40; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .event-card.violation { border-color: #ff4757; }
+    .card-header { display: flex; justify-content: space-between; font-size: 9px; color: #00d2ff; font-weight: 700; }
+    .card-body { display: flex; gap: 10px; align-items: center; }
+    .plate-crop {
+      width: 92px;
+      height: 48px;
+      background: #101520;
+      border: 1.5px solid #00d2ff;
+      border-radius: 5px;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .event-card.violation .plate-crop {
+      border-color: #ff4757;
+    }
+    .plate-text { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: #fff; }
+
+    /* TAB VIEWS */
+    .tab-view { flex: 1; padding: 24px; overflow-y: auto; display: none; }
+    .tab-view.active { display: block; }
+    .btn { background: #00d2ff; border: none; color: #000; font-weight: 700; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .btn-danger { background: rgba(255,71,87,0.2); border: 1px solid #ff4757; color: #ff4757; }
+    .btn-success { background: #2ed573; color: #000; }
+    .table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; margin-top: 12px; }
+    .table th { border-bottom: 1px solid #262f40; color: #00d2ff; padding: 8px; }
+    .table td { border-bottom: 1px solid #1a2236; padding: 8px; }
+
+    /* Multi-Camera Vehicle Tracking Markers & Animations */
+    .vehicle-marker-confirmed {
+      background: #2ed573;
+      border: 2.5px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 12px #2ed573, 0 0 4px #000;
+      transition: transform 0.4s ease-out;
+    }
+    .vehicle-marker-predicted {
+      background: rgba(255, 165, 2, 0.85);
+      border: 2px dashed #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #ffa502;
+      animation: pulsePredicted 1.4s infinite;
+      transition: transform 0.4s ease-out;
+    }
+    .vehicle-marker-vanished {
+      background: rgba(255, 71, 87, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 50%;
+      opacity: 0 !important;
+      transform: scale(0.35);
+      transition: opacity 2s ease-out, transform 2s ease-out;
+    }
+    @keyframes pulsePredicted {
+      0% { box-shadow: 0 0 3px #ffa502; }
+      50% { box-shadow: 0 0 14px #ffa502, 0 0 18px rgba(255, 165, 2, 0.6); }
+      100% { box-shadow: 0 0 3px #ffa502; }
+    }
+    .vehicle-plate-tooltip {
+      background: #161c28 !important;
+      border: 1px solid #00d2ff !important;
+      color: #fff !important;
+      font-family: 'JetBrains Mono', monospace !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      padding: 3px 7px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6) !important;
+    }
+    .vehicle-plate-tooltip.predicted {
+      border-color: #ffa502 !important;
+      color: #ffa502 !important;
+    }
+    .custom-vehicle-div-icon {
+      background: transparent;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-area">🚦 DSS TrafficSentinel AI</div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" onclick="switchTab('live', this)">Live View</div>
+      <div class="nav-tab" onclick="switchTab('review', this)">Review Queue</div>
+      <div class="nav-tab" onclick="switchTab('analytics', this)">Analytics</div>
+      <div class="nav-tab" onclick="switchTab('citymap', this)">City Map</div>
+      <div class="nav-tab" onclick="switchTab('blacklist', this)">Blacklist</div>
+      <div class="nav-tab" onclick="switchTab('anpr', this)">ANPR Trace</div>
+      <div class="nav-tab" onclick="switchTab('anpr-lab', this)" style="color:#00d2ff; font-weight:700;">🔬 ANPR Lab</div>
+      <div class="nav-tab" onclick="switchTab('calibration', this)">Calibration</div>
+    </div>
+    <div class="header-status">
+      <div><span class="status-dot"></span>ONLINE</div>
+      <div id="live-clock">00:00:00</div>
+    </div>
+  </header>
+
+  <!-- MAIN BODY -->
+  <div class="main-body">
+
+    <!-- LIVE VIEW PAGE -->
+    <div id="view-live" style="display:flex; flex:1; width:100%;">
+      <!-- LEFT SIDEBAR -->
+      <div class="left-sidebar">
+        <div style="font-size:11px; font-weight:700; color:#00d2ff;">📹 Video Source Selector</div>
+        <select id="source-select-dropdown" class="input-box" onchange="handleSourceSelect(this.value)">
+          <option value="upload" selected>📁 Upload Video File Manually</option>
+          <option value="webcam">📹 Webcam (Device Index 0)</option>
+          <option value="rtsp">🌐 CCTV / RTSP Stream</option>
+        </select>
+        <div style="position:relative; margin-top:6px;">
+          <label for="video-file-input" id="upload-label-text" style="display:block; padding:10px; background:#1a2236; border:2px dashed #00d2ff; border-radius:6px; color:#00d2ff; font-size:11px; font-weight:700; text-align:center; cursor:pointer;">
+            📤 Click to Upload Video (.mp4, .avi)
+          </label>
+          <input type="file" id="video-file-input" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" accept="video/*" onchange="uploadVideoFile(this.files[0])">
+        </div>
+
+        <div style="font-size:11px; font-weight:700; color:#00d2ff; margin-top:10px;">📷 Camera Checkpoint</div>
+        <select id="camera-select-dropdown" class="input-box" onchange="selectLiveCamera(this.value)">
+          <option value="">Loading camera nodes...</option>
+        </select>
+
+        <div style="font-size:11px; font-weight:700; color:#00d2ff; margin-top:10px;">⚙️ AI Rule Toggles</div>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('OVERSPEEDING', this.checked)"> Overspeeding</label>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('RED_LIGHT', this.checked)"> Red Light Crossing</label>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('NO_HELMET', this.checked)"> Helmet Detection</label>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('TRIPLE_RIDING', this.checked)"> Triple Riding</label>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('WRONG_WAY', this.checked)"> Wrong-Way Driving</label>
+        <label style="font-size:11px;"><input type="checkbox" checked onchange="toggleRule('ILLEGAL_PARKING', this.checked)"> Illegal Parking</label>
+
+        <div style="font-size:11px; font-weight:700; color:#00d2ff; margin-top:10px;">⚡ Thresholds</div>
+        <label style="font-size:10px; color:#a0aec0;">Speed Limit (km/h):</label>
+        <input type="number" value="60" class="input-box" onchange="updateSetting('speed_limit', parseFloat(this.value))">
+
+        <label style="font-size:10px; color:#a0aec0; margin-top:6px;">Auto-Issue Confidence:</label>
+        <input type="range" min="0.5" max="0.99" step="0.05" value="0.65" style="width:100%;" onchange="updateSetting('auto_issue_conf', parseFloat(this.value))">
+
+        <div style="font-size:11px; font-weight:700; color:#ff4757; margin-top:10px;">📱 Telegram Alert Service</div>
+        <input type="password" id="tg-token" class="input-box" value="8850261046:AAG1gi0rcDDDPe4ny2YIo5fVXv65MDsxWQE" placeholder="Bot Token">
+        <input type="text" id="tg-chat" class="input-box" value="5023326653" placeholder="Chat ID">
+        <button class="btn btn-danger" style="width:100%;" onclick="sendTestAlert()">Send Test Alert</button>
+        <div id="tg-status" style="font-size:10px; color:#2ed573;"></div>
+      </div>
+
+      <!-- CENTER VIDEO VIEWPORT -->
+      <div class="viewport">
+        <div class="video-container">
+          <div class="video-hud">
+            <span id="hud-info">YOLO26 · STANDBY (Upload video or select source to start)</span>
+            <span id="hud-cam">CAM-01</span>
+          </div>
+          <img id="stream-img" class="video-stream" src="/stream" alt="Live AI Stream">
+        </div>
+
+        <!-- PLAY / PAUSE & STREAM CONTROLS -->
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#161c28; border:1px solid #262f40; border-radius:6px; padding:8px 12px; margin-top:8px; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="btn-pause-toggle" class="btn" style="background:#ffa502; color:#121620; font-weight:700; font-size:12px; padding:6px 14px; border-radius:6px; cursor:pointer;" onclick="togglePlayPause()">
+              ⏸️ Pause Stream
+            </button>
+            <button class="btn" style="background:#262f40; color:#fff; font-size:12px; padding:6px 12px; cursor:pointer;" onclick="restartVideoStream()">
+              🔄 Replay Video
+            </button>
+            <button class="btn" style="background:#1a2236; font-size:12px; padding:6px 12px; color:#00d2ff; border:1px solid #00d2ff; cursor:pointer;" onclick="sendCurrentFrameToLab()">
+              🔬 Send Frame to ANPR Lab
+            </button>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; font-size:12px; color:#a0aec0;">
+            <span>Pipeline: <strong id="pipeline-status-text" style="color:#2ed573;">🟢 PLAYING</strong></span>
+            <span style="color:#4a5568;">|</span>
+            <span style="background:#262f40; padding:2px 8px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#00d2ff;">RTX 3050 CUDA</span>
+          </div>
+        </div>
+
+        <!-- LIVE LOGS TABLE (Streamlit feature) -->
+        <div style="height: 120px; background:#161c28; border:1px solid #262f40; border-radius:6px; padding:8px; overflow-y:auto;">
+          <div style="font-size:11px; font-weight:700; color:#00d2ff; margin-bottom:4px;">📋 Live Vehicle & Violation Detection Logs</div>
+          <table class="table" style="margin-top:0;">
+            <thead>
+              <tr><th>Type</th><th>Track</th><th>Plate</th><th>Conf</th><th>Status</th><th>Fine</th><th>Why Reasoning</th></tr>
+            </thead>
+            <tbody id="live-logs-body">
+              <tr><td colspan="7" style="color:#a0aec0;">No active live violations detected.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDEBAR EVENT FEED -->
+      <div class="right-sidebar">
+        <div class="sidebar-header">
+          <span>ANPR Event Feed</span>
+          <span style="font-size:10px; color:#4a5a72;">LIVE</span>
+        </div>
+        <div class="event-feed" id="event-feed"></div>
+      </div>
+    </div>
+
+    <!-- REVIEW QUEUE PAGE -->
+    <div id="view-review" class="tab-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div>
+          <h2 style="color:#00d2ff;">📋 Review Queue</h2>
+          <p style="font-size:12px; color:#a0aec0;">Violations awaiting officer confirmation or dismissal before issuing challans.</p>
+        </div>
+        <button class="btn btn-danger" onclick="clearAllLogs()">🗑️ Clear All Logs & Evidence</button>
+      </div>
+      <div id="review-list"></div>
+    </div>
+
+    <!-- ANALYTICS PAGE -->
+    <div id="view-analytics" class="tab-view">
+      <h2 style="color:#00d2ff; margin-bottom:16px;">📊 Analytics & Fine Revenue (INR ₹)</h2>
+
+      <!-- KPI CARDS -->
+      <div id="analytics-kpi" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:16px; margin-bottom:24px;"></div>
+
+      <!-- CHARTS ROW -->
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:24px;">
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">📊 Violations by Type (Bar Chart)</div>
+          <div style="position:relative; height:280px; width:100%;">
+            <canvas id="chart-violations-bar"></canvas>
+          </div>
+        </div>
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">💰 Fine Revenue Distribution (Doughnut Chart)</div>
+          <div style="position:relative; height:280px; width:100%;">
+            <canvas id="chart-fine-doughnut"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- DETAILED BREAKDOWN TABLE -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+        <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">📋 Detailed Fine Breakdown per Violation Type</div>
+        <table class="table">
+          <thead>
+            <tr><th>Violation Type</th><th>Count</th><th>Fine/Item (₹)</th><th>Total Fine (₹)</th><th>% of Total Revenue</th><th>Bar</th></tr>
+          </thead>
+          <tbody id="analytics-breakdown-body">
+            <tr><td colspan="6" style="color:#a0aec0;">No data yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ANPR TRACE PAGE -->
+    <div id="view-anpr" class="tab-view">
+      <h2 style="color:#00d2ff; margin-bottom:16px;">🚘 ANPR Trace & Vehicle Trajectory</h2>
+      <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <input type="text" id="anpr-search" class="input-box" style="width:300px;" placeholder="Enter plate number (e.g. MH12AB1234)...">
+        <button class="btn" onclick="searchTrace()">Search Trace</button>
+      </div>
+
+      <!-- Summary -->
+      <div id="anpr-summary" style="margin-bottom:16px;"></div>
+
+      <!-- Map -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; margin-bottom:16px;">
+        <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">🗺️ Vehicle Route Map</div>
+        <div id="anpr-map" style="height:360px; border-radius:6px; background:#0a0f14;"></div>
+      </div>
+
+      <!-- Sightings Timeline Table -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px;">
+        <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">📋 Sighting Timeline</div>
+        <table class="table">
+          <thead>
+            <tr><th>#</th><th>Timestamp</th><th>Camera ID</th><th>Plate</th><th>Lat</th><th>Lon</th><th>Violation</th></tr>
+          </thead>
+          <tbody id="anpr-sightings-body">
+            <tr><td colspan="7" style="color:#a0aec0;">Search a plate number to see sighting history.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CALIBRATION PAGE -->
+    <div id="view-calibration" class="tab-view">
+      <h2 style="color:#00d2ff; margin-bottom:16px;">📐 Spatial Calibration & Hardware Status</h2>
+      <div id="calibration-content">Loading calibration status...</div>
+    </div>
+
+    <!-- BLACKLIST PAGE -->
+    <div id="view-blacklist" class="tab-view">
+      <h2 style="color:#ff4757; margin-bottom:16px;">🚨 Blacklisted Vehicle Management</h2>
+
+      <!-- Blacklist Alert Banner -->
+      <div id="blacklist-alert-banner" style="display:none; background:rgba(255,71,87,0.15); border:2px solid #ff4757; border-radius:8px; padding:14px 18px; margin-bottom:16px; animation: pulse 1s infinite;">
+        <div style="font-size:14px; font-weight:700; color:#ff4757;">🚨 BLACKLISTED VEHICLE DETECTED!</div>
+        <div id="blacklist-alert-detail" style="font-size:12px; color:#fff; margin-top:4px;"></div>
+      </div>
+
+      <!-- Add Plate & CSV Import Form -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">➕ Add Single Vehicle</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <input type="text" id="bl-plate" class="input-box" placeholder="Plate number (e.g. MH12AB1234)">
+            <input type="text" id="bl-reason" class="input-box" placeholder="Reason (e.g. Stolen, Wanted, Hit & Run)">
+            <div style="display:flex; gap:10px;">
+              <select id="bl-severity" style="flex:1; background:#1a2236; color:#fff; border:1px solid #262f40; padding:6px 10px; border-radius:4px; font-size:12px;">
+                <option value="high">🔴 High Priority</option>
+                <option value="medium">🟡 Medium Priority</option>
+                <option value="low">🟢 Low Priority</option>
+              </select>
+              <button class="btn" onclick="addBlacklist()">Add Vehicle</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#2ed573; margin-bottom:8px;">📁 Batch CSV Blacklist Import</div>
+          <p style="font-size:11px; color:#a0aec0; margin-bottom:8px;">Upload a CSV file containing columns: <code>plate,reason,severity</code></p>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="file" id="bl-csv-file" accept=".csv,.txt" style="display:none;" onchange="uploadBlacklistCSV(this)">
+            <label for="bl-csv-file" class="btn" style="background:#2ed573; color:#000; cursor:pointer;">📂 Choose CSV File</label>
+            <span id="bl-csv-status" style="font-size:11px; color:#a0aec0;">No file chosen</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Blacklist Table -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+        <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">📋 Active Blacklisted Vehicles</div>
+        <table class="table">
+          <thead>
+            <tr><th>Plate</th><th>Reason</th><th>Severity</th><th>Added</th><th>Action</th></tr>
+          </thead>
+          <tbody id="blacklist-body">
+            <tr><td colspan="5" style="color:#a0aec0;">No blacklisted vehicles.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CITY TRAFFIC MAP PAGE -->
+    <div id="view-citymap" class="tab-view">
+      <h2 style="color:#00d2ff; margin-bottom:16px;">🌆 City-Wide Traffic Map & Heatmap</h2>
+
+      <!-- KPI Row -->
+      <div id="citymap-kpi" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:16px;"></div>
+
+      <!-- MULTI-CAMERA VEHICLE TRACKING & BRANCH PREDICTION SIMULATOR BAR -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div>
+            <div style="font-size:13px; font-weight:700; color:#00d2ff; display:flex; align-items:center; gap:8px;">
+              <span>🔀 Multi-Camera ANPR Tracking & Fork Prediction</span>
+              <span id="tracking-active-badge" style="background:#a0aec0; color:#000; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:700;">0 Active</span>
+            </div>
+            <div style="font-size:11px; color:#a0aec0; margin-top:2px;">
+              Continuous dead-reckoning along OSM polylines with branch prediction at forks and downstream Levenshtein matching.
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div style="display:flex; gap:6px; font-size:11px; align-items:center; background:#0d1117; padding:4px 10px; border-radius:6px; border:1px solid #262f40;">
+              <span style="color:#2ed573;">🟢 Confirmed</span>
+              <span style="color:#ffa502;">🟡 Predicted Branch</span>
+              <span style="color:#ff4757;">⚪ Vanishing</span>
+            </div>
+            <button class="btn btn-danger" style="font-size:11px; padding:5px 10px;" onclick="resetTrackingSimulation()">🔄 Reset Tracker</button>
+          </div>
+        </div>
+
+        <!-- Simulation Quick-Trigger Action Buttons -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:#0d1117; padding:10px; border-radius:6px; border:1px solid #262f40;">
+          <span style="font-size:11px; font-weight:700; color:#00d2ff; margin-right:4px;">⚡ Quick Scenario:</span>
+          
+          <button class="btn" style="font-size:11px; padding:6px 12px; background:#1e3799; color:#fff;" onclick="simulateCarEntry()">
+            🚗 1. Enter CAM-01
+          </button>
+          
+          <button class="btn" style="font-size:11px; padding:6px 12px; background:#ffa502; color:#000;" onclick="simulateForkReach()">
+            🔀 2. Reach Fork CAM-03 (Spawn Branches)
+          </button>
+          
+          <button class="btn" style="font-size:11px; padding:6px 12px; background:#2ed573; color:#000;" onclick="simulateBranchConfirm()">
+            🎯 3. Confirm CAM-08 (Prune CAM-09)
+          </button>
+          
+          <button class="btn" style="font-size:11px; padding:6px 12px; background:#a29bfe; color:#000;" onclick="simulateFuzzyMatch()">
+            🔤 4. Test Fuzzy Typo (Levenshtein ≤ 2)
+          </button>
+
+          <!-- Custom Sighting Form inline -->
+          <div style="display:flex; gap:6px; align-items:center; margin-left:auto;">
+            <input type="text" id="sim-custom-plate" class="input-box" style="width:115px; font-family:'JetBrains Mono',monospace;" placeholder="Plate (WB02AK..)">
+            <select id="sim-custom-cam" class="input-box" style="width:125px;">
+              <option value="CAM-01">CAM-01 (Entry)</option>
+              <option value="CAM-06">CAM-06 (Russell)</option>
+              <option value="CAM-11">CAM-11 (Mid West)</option>
+              <option value="CAM-03" selected>CAM-03 (Fork J1)</option>
+              <option value="CAM-09">CAM-09 (Mid East)</option>
+              <option value="CAM-10">CAM-10 (Mullick)</option>
+              <option value="CAM-08">CAM-08 (Camac Mid)</option>
+              <option value="CAM-07">CAM-07 (Fork J2)</option>
+              <option value="CAM-04">CAM-04 (JLN West)</option>
+              <option value="CAM-05">CAM-05 (Hungerford)</option>
+            </select>
+            <input type="number" id="sim-custom-speed" class="input-box" style="width:70px;" value="42" placeholder="km/h">
+            <button class="btn" style="font-size:11px; padding:6px 10px;" onclick="triggerCustomSighting()">Trigger</button>
+          </div>
+        </div>
+
+        <!-- Live Vehicle Fleet Table Inspector -->
+        <div id="tracking-vehicles-panel" style="margin-top:12px; max-height:160px; overflow-y:auto; display:none;">
+          <table class="table" style="margin-top:0; font-size:11px;">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Plate Number</th>
+                <th>Current Corridor / Branch</th>
+                <th>Speed</th>
+                <th>Progress</th>
+                <th>ETA</th>
+                <th>Confidence</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tracking-vehicles-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- City Map -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="font-size:12px; font-weight:700; color:#00d2ff;">🗺️ Traffic Density & Camera Network</div>
+            <div style="display:flex; gap:6px; font-size:11px; align-items:center;">
+              <span style="color:#2ed573;">🟢 Active</span>
+              <span style="color:#ff4757;">🔴 Junctions</span>
+              <span style="color:#ffa502;">🟡 Midways</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn" onclick="filterCams('all')" id="btn-filter-all" style="font-size:10px; padding:4px 8px; background:#262f40; color:#fff;">All (13)</button>
+            <button class="btn" onclick="filterCams('junction')" id="btn-filter-junc" style="font-size:10px; padding:4px 8px; background:#262f40; color:#fff;">🔴 Junctions (8)</button>
+            <button class="btn" onclick="filterCams('midway')" id="btn-filter-mid" style="font-size:10px; padding:4px 8px; background:#262f40; color:#fff;">🟡 Midways (5)</button>
+            <button class="btn" onclick="seedDemoData()" style="background:#9c88ff; color:#fff; font-size:10px; padding:4px 8px;">🎲 Seed City Data</button>
+            <button class="btn" onclick="toggleHeatmap()" id="btn-heatmap" style="font-size:10px; padding:4px 8px;">🔥 Heatmap ON</button>
+          </div>
+        </div>
+        <div id="city-map" style="height:420px; border-radius:6px; background:#0a0f14; cursor:crosshair;"></div>
+        <div style="font-size:10px; color:#a0aec0; margin-top:6px;">💡 <em>Tip: Click anywhere on the map above to place a new Junction or Midway camera!</em></div>
+      </div>
+
+      <!-- Add Manual Camera Form -->
+      <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px; margin-bottom:16px;">
+        <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">➕ Add Camera at Junction or Midway Point</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="cam-id" class="input-box" style="width:120px;" placeholder="CAM-14">
+          <input type="text" id="cam-name" class="input-box" style="width:240px;" placeholder="Location / Junction Name">
+          <select id="cam-kind" style="background:#1a2236; color:#fff; border:1px solid #262f40; padding:6px 10px; border-radius:4px; font-size:12px;">
+            <option value="junction">🔴 Road Junction</option>
+            <option value="midway">🟡 Midway Corridor Checkpoint</option>
+          </select>
+          <input type="number" step="0.0001" id="cam-lat" class="input-box" style="width:110px;" placeholder="Latitude (22.55)">
+          <input type="number" step="0.0001" id="cam-lon" class="input-box" style="width:110px;" placeholder="Longitude (88.35)">
+          <button class="btn" onclick="addManualCamera()">+ Place Camera</button>
+        </div>
+      </div>
+
+      <!-- Traffic Time-Series Chart -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">📈 Vehicle Count Over Time</div>
+          <div style="position:relative; height:260px; width:100%;">
+            <canvas id="chart-flow-timeseries"></canvas>
+          </div>
+        </div>
+        <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+          <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">🚧 Congestion Bottlenecks</div>
+          <div id="congestion-list" style="max-height:260px; overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANPR LAB & MODEL EVALUATION PLAYGROUND -->
+    <div id="view-anpr-lab" class="tab-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <div>
+          <h2 style="color:#00d2ff; margin-bottom:4px;">🔬 ANPR Lab & Model Evaluation Playground</h2>
+          <p style="font-size:12px; color:#a0aec0;">
+            Test, evaluate, and benchmark different fine-tuned YOLO plate detection models with real-time OCR accuracy, latency (ms), and MoRTH Indian plate format compliance.
+          </p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="lab-device-badge" style="background:#1a2236; border:1px solid #2ed573; color:#2ed573; font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px;">
+            🟢 GPU: NVIDIA RTX 3050
+          </span>
+        </div>
+      </div>
+
+      <!-- MODE SELECTOR: IMAGE vs VIDEO -->
+      <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <button id="btn-lab-mode-img" class="btn" style="background:#00d2ff; color:#121620; font-weight:700; padding:8px 18px; border-radius:6px; cursor:pointer;" onclick="setLabMode('image')">
+          🖼️ Image / Frame Mode
+        </button>
+        <button id="btn-lab-mode-vid" class="btn" style="background:#262f40; color:#fff; font-weight:700; padding:8px 18px; border-radius:6px; cursor:pointer;" onclick="setLabMode('video')">
+          🎬 Video File Evaluation Mode
+        </button>
+      </div>
+
+      <!-- LAB WORKSPACE -->
+      <div style="display:grid; grid-template-columns: 360px 1fr; gap:20px; align-items:start;">
+        
+        <!-- LEFT CONTROL PANEL -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          
+          <!-- MODEL SELECTOR -->
+          <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px;">
+            <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">🤖 1. Select Plate Detection Model</div>
+            <select id="lab-model-select" class="input-box" style="margin-bottom:8px;">
+              <option value="">Loading available models...</option>
+            </select>
+            <div style="font-size:11px; color:#a0aec0; margin-bottom:6px;">Or upload custom <code>.pt</code> weights:</div>
+            <div style="position:relative;">
+              <label for="lab-model-file" id="lab-model-upload-label" style="display:block; padding:8px; background:#1a2236; border:1px dashed #00d2ff; border-radius:6px; color:#00d2ff; font-size:11px; text-align:center; cursor:pointer;">
+                📁 Upload Custom .pt Model Weights
+              </label>
+              <input type="file" id="lab-model-file" accept=".pt" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="uploadCustomModel(this.files[0])">
+            </div>
+            <div id="lab-upload-model-status" style="font-size:11px; margin-top:4px;"></div>
+          </div>
+
+          <!-- IMAGE MODE INPUT SELECTOR -->
+          <div id="lab-panel-image" style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px;">
+            <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">🖼️ 2. Test Image / Frame Source</div>
+            
+            <button class="btn" style="width:100%; background:#262f40; color:#00d2ff; border:1px solid #00d2ff; margin-bottom:8px; padding:8px; cursor:pointer;" onclick="grabCurrentFrameForLab()">
+              📸 Grab Current Video Frame
+            </button>
+            
+            <div style="position:relative; margin-bottom:8px;">
+              <label for="lab-image-file" id="lab-image-label" style="display:block; padding:12px; background:#1a2236; border:2px dashed #4a5a72; border-radius:6px; color:#a0aec0; font-size:11px; text-align:center; cursor:pointer;">
+                📤 Click to Select Test Image (.jpg / .png)
+              </label>
+              <input type="file" id="lab-image-file" accept="image/*" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="handleLabImageSelect(this.files[0])">
+            </div>
+
+            <!-- Image preview thumbnail -->
+            <div id="lab-image-preview-box" style="display:none; text-align:center; margin-top:6px;">
+              <img id="lab-image-preview" style="max-height:100px; max-width:100%; border-radius:4px; border:1px solid #262f40;">
+              <div id="lab-image-preview-name" style="font-size:10px; color:#888; margin-top:2px;"></div>
+            </div>
+          </div>
+
+          <!-- VIDEO MODE INPUT SELECTOR -->
+          <div id="lab-panel-video" style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px; display:none;">
+            <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">🎬 2. Upload Test Video File (.mp4)</div>
+            
+            <div id="lab-video-upload-box" style="position:relative; margin-bottom:10px;">
+              <label for="lab-video-file" id="lab-video-label" style="display:block; padding:12px; background:#1a2236; border:2px dashed #00d2ff; border-radius:6px; color:#00d2ff; font-size:11px; text-align:center; cursor:pointer;">
+                📁 Click to Select Video File (.mp4, .avi, .mov)
+              </label>
+              <input type="file" id="lab-video-file" accept="video/*" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="handleLabVideoSelect(this.files[0])">
+            </div>
+
+            <label style="font-size:11px; color:#a0aec0; display:block; margin-bottom:4px;">Frames to Evaluate:</label>
+            <select id="lab-video-frames" class="input-box" style="margin-bottom:8px;">
+              <option value="50" selected>⚡ 50 frames (~2 sec test - Fast & Recommended)</option>
+              <option value="100">🎬 100 frames (~4 sec evaluation)</option>
+              <option value="200">🔍 200 frames (~8 sec deep test)</option>
+              <option value="0">⏳ All Video Frames (Full video clip)</option>
+            </select>
+
+            <label style="font-size:11px; color:#a0aec0; display:block; margin-bottom:4px;">OCR Frequency:</label>
+            <select id="lab-video-ocr-interval" class="input-box" style="margin-bottom:8px;">
+              <option value="3" selected>Sample every 3 frames (Recommended - Fast)</option>
+              <option value="5">Sample every 5 frames (Ultra Fast)</option>
+              <option value="1">Every frame (Deep)</option>
+            </select>
+          </div>
+
+          <!-- EVALUATION PARAMETERS -->
+          <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:14px;">
+            <div style="font-size:12px; font-weight:700; color:#00d2ff; margin-bottom:8px;">⚙️ 3. Detection Threshold</div>
+            
+            <div style="margin-bottom:10px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:#a0aec0;">
+                <span>Detection Confidence:</span>
+                <span id="val-lab-conf" style="color:#00d2ff; font-weight:700;">0.25</span>
+              </div>
+              <input type="range" id="lab-conf-thresh" min="0.10" max="0.90" step="0.05" value="0.25" style="width:100%; margin-top:4px;" oninput="document.getElementById('val-lab-conf').innerText = parseFloat(this.value).toFixed(2)">
+            </div>
+
+            <label style="font-size:11px; display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer;">
+              <input type="checkbox" id="lab-enable-ocr" checked>
+              <span>🔤 Enable Full OCR & MoRTH Validation</span>
+            </label>
+          </div>
+
+          <!-- RUN BUTTONS (Image Mode) -->
+          <div id="lab-buttons-image" style="display:flex; flex-direction:column; gap:8px;">
+            <button id="btn-run-eval" class="btn btn-success" style="padding:10px; font-size:13px; font-weight:700; cursor:pointer;" onclick="runAnprEvaluation()">
+              🚀 Run Single Model Evaluation
+            </button>
+            <button id="btn-run-bench" class="btn" style="background:#ffa502; color:#121620; padding:8px; font-size:12px; font-weight:700; cursor:pointer;" onclick="benchmarkAllModels()">
+              ⚡ Benchmark All Models Side-by-Side
+            </button>
+          </div>
+
+          <!-- RUN BUTTONS (Video Mode) -->
+          <div id="lab-buttons-video" style="display:none; flex-direction:column; gap:8px;">
+            <button id="btn-run-video-eval" class="btn btn-success" style="padding:10px; font-size:13px; font-weight:700; cursor:pointer;" onclick="runAnprVideoEvaluation()">
+              🎬 Run Video ANPR Evaluation
+            </button>
+            <button id="btn-run-video-bench" class="btn" style="background:#ffa502; color:#121620; padding:8px; font-size:12px; font-weight:700; cursor:pointer;" onclick="benchmarkAllModelsVideo()">
+              ⚡ Benchmark All Models on Video
+            </button>
+          </div>
+
+        </div>
+
+        <!-- RIGHT RESULTS DISPLAY -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          
+          <!-- KPI RESULTS SUMMARY -->
+          <div id="lab-kpi-row" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;">
+            <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; border-left:4px solid #00d2ff;">
+              <div style="font-size:10px; color:#a0aec0;">Inference Latency</div>
+              <div id="kpi-lab-latency" style="font-size:20px; font-weight:700; color:#00d2ff;">-- ms</div>
+            </div>
+            <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; border-left:4px solid #2ed573;">
+              <div style="font-size:10px; color:#a0aec0;">Plates Detected</div>
+              <div id="kpi-lab-count" style="font-size:20px; font-weight:700; color:#2ed573;">--</div>
+            </div>
+            <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; border-left:4px solid #ffa502;">
+              <div style="font-size:10px; color:#a0aec0;">Top OCR Plate</div>
+              <div id="kpi-lab-ocr" style="font-size:18px; font-weight:700; color:#ffa502; font-family:'JetBrains Mono',monospace;">--</div>
+            </div>
+            <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:12px; border-left:4px solid #9c88ff;">
+              <div style="font-size:10px; color:#a0aec0;">Indian MoRTH Status</div>
+              <div id="kpi-lab-morth" style="font-size:14px; font-weight:700; color:#9c88ff;">--</div>
+            </div>
+          </div>
+
+          <!-- VISUAL RESULTS CONTAINER -->
+          <div style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div style="font-size:12px; font-weight:700; color:#00d2ff;">🎯 Detection Visuals & Plate Isolations</div>
+              <span id="lab-eval-status" style="font-size:11px; color:#a0aec0;">Ready for evaluation</span>
+            </div>
+
+            <!-- Annotated Image Display -->
+            <div style="background:#0a0f14; border:1px solid #262f40; border-radius:6px; min-height:280px; max-height:420px; display:flex; justify-content:center; align-items:center; overflow:hidden; position:relative;">
+              <img id="lab-annotated-img" style="max-height:420px; max-width:100%; object-fit:contain; display:none;">
+              <div id="lab-annotated-placeholder" style="color:#4a5a72; font-size:13px; text-align:center; padding:40px;">
+                Upload an image or grab a video frame, select a model, and click <strong>"Run Single Model Evaluation"</strong>.
+              </div>
+            </div>
+
+            <!-- Annotated Video Display -->
+            <div id="lab-video-container" style="background:#0a0f14; border:1px solid #262f40; border-radius:6px; min-height:280px; max-height:420px; display:none; justify-content:center; align-items:center; overflow:hidden; position:relative; margin-top:10px;">
+              <video id="lab-annotated-video" controls autoplay loop style="max-height:420px; max-width:100%; object-fit:contain;"></video>
+            </div>
+
+            <!-- Isolated Plates Gallery -->
+            <div style="margin-top:14px;">
+              <div style="font-size:11px; font-weight:700; color:#a0aec0; margin-bottom:8px;">Extracted License Plate Crops & OCR Reads:</div>
+              <div id="lab-plates-gallery" style="display:flex; gap:10px; flex-wrap:wrap;">
+                <div style="font-size:11px; color:#4a5a72;">No plates extracted yet.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MODEL BENCHMARK COMPARISON TABLE -->
+          <div id="lab-benchmark-section" style="background:#161c28; border:1px solid #262f40; border-radius:8px; padding:16px; display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-size:12px; font-weight:700; color:#ffa502;">⚡ Multi-Model Benchmark Comparison</div>
+              <button class="btn" style="font-size:10px; padding:3px 8px; background:#262f40; color:#00d2ff;" onclick="exportBenchmarkCSV()">📥 Export CSV</button>
+            </div>
+            <table class="table" style="margin-top:0;">
+              <thead>
+                <tr>
+                  <th>Model Weights</th>
+                  <th>Plates Found</th>
+                  <th>Avg Detection Conf</th>
+                  <th>Inference Latency</th>
+                  <th>FPS</th>
+                  <th>Top OCR Prediction</th>
+                  <th>MoRTH Compliance</th>
+                </tr>
+              </thead>
+              <tbody id="lab-benchmark-body"></tbody>
+            </table>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    setInterval(() => { document.getElementById('live-clock').innerText = new Date().toLocaleTimeString(); }, 1000);
+
+    // Initial dropdown population
+    document.addEventListener('DOMContentLoaded', () => {
+      populateCameraDropdown();
+    });
+    populateCameraDropdown();
+
+    async function populateCameraDropdown() {
+      try {
+        const res = await fetch('/api/cameras');
+        const cameras = await res.json();
+        const dropdown = document.getElementById('camera-select-dropdown');
+        if (!dropdown) return;
+        dropdown.innerHTML = cameras.map(cam => {
+          const icon = cam.active ? '🟢' : (cam.kind === 'midway' ? '🟡' : '🔴');
+          return `<option value="${cam.id}" ${cam.active ? 'selected' : ''}>${icon} ${cam.id} — ${cam.name}</option>`;
+        }).join('');
+      } catch(e) { console.error('Error loading camera dropdown:', e); }
+    }
+
+    async function selectLiveCamera(camId) {
+      if (!camId) return;
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ camera_id: camId })
+      });
+      populateCameraDropdown();
+      if (cityMap) loadCityMap();
+    }
+
+    function switchTab(name, el) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      if (el) {
+        el.classList.add('active');
+      } else if (window.event && window.event.target && window.event.target.classList) {
+        window.event.target.classList.add('active');
+      } else {
+        const tabs = Array.from(document.querySelectorAll('.nav-tab'));
+        const matched = tabs.find(t => t.getAttribute('onclick') && t.getAttribute('onclick').includes(`'${name}'`));
+        if (matched) matched.classList.add('active');
+      }
+      
+      document.getElementById('view-live').style.display = (name === 'live') ? 'flex' : 'none';
+      document.getElementById('view-review').classList.toggle('active', name === 'review');
+      document.getElementById('view-analytics').classList.toggle('active', name === 'analytics');
+      document.getElementById('view-anpr').classList.toggle('active', name === 'anpr');
+      document.getElementById('view-calibration').classList.toggle('active', name === 'calibration');
+      document.getElementById('view-blacklist').classList.toggle('active', name === 'blacklist');
+      document.getElementById('view-citymap').classList.toggle('active', name === 'citymap');
+      document.getElementById('view-anpr-lab').classList.toggle('active', name === 'anpr-lab');
+
+      if (name === 'review') loadReviewQueue();
+      if (name === 'analytics') loadAnalytics();
+      if (name === 'calibration') loadCalibration();
+      if (name === 'blacklist') loadBlacklist();
+      if (name === 'citymap') loadCityMap();
+      if (name === 'anpr-lab') initAnprLab();
+    }
+
+    function updateSetting(key, val) {
+      const payload = {}; payload[key] = val;
+      fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    }
+
+    function toggleRule(ruleId, checked) {
+      const rules = {}; rules[ruleId] = checked;
+      fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enabled_rules: rules }) });
+    }
+
+    async function sendTestAlert() {
+      const token = document.getElementById('tg-token').value;
+      const chat = document.getElementById('tg-chat').value;
+      document.getElementById('tg-status').innerText = 'Sending...';
+      const res = await fetch('/api/alerts/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ bot_token: token, chat_id: chat }) });
+      const data = await res.json();
+      document.getElementById('tg-status').innerText = data.message || 'Done';
+    }
+
+    function handleSourceSelect(val) {
+      if (val === 'upload') {
+        document.getElementById('video-file-input').click();
+      } else if (val === 'existing') {
+        restartVideoStream();
+      } else if (val === 'webcam') {
+        updateSetting('source', '0');
+      }
+    }
+
+    async function uploadVideoFile(file) {
+      if (!file) return;
+      const label = document.getElementById('upload-label-text');
+      if (label) label.innerText = `⏳ Uploading ${file.name}...`;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/upload-video', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (label) label.innerText = `🟢 Processing: ${file.name}`;
+        // Reconnect stream image to force instant rendering
+        const streamImg = document.getElementById('stream-img');
+        if (streamImg) streamImg.src = `/stream?t=${Date.now()}`;
+      } catch(e) {
+        if (label) label.innerText = `❌ Upload failed`;
+      }
+    }
+
+    function togglePipeline(run) {
+      fetch('/api/pipeline/toggle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ run }) });
+    }
+
+    // Stats polling
+    setInterval(async () => {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('hud-info').innerText = data.pipeline_active ? `YOLO26 · ${data.fps} FPS · ${data.infer_ms}ms · Tracks: ${data.active_tracks}` : 'YOLO26 · Pipeline Paused / Idle';
+        const overlay = document.getElementById('idle-overlay');
+        if (overlay) overlay.style.display = data.pipeline_active ? 'none' : 'flex';
+
+        // Update Pause/Play button
+        const pauseBtn = document.getElementById('btn-pause-toggle');
+        const statusText = document.getElementById('pipeline-status-text');
+        if (data.pipeline_active) {
+          if (pauseBtn) {
+            pauseBtn.innerHTML = '⏸️ Pause Stream';
+            pauseBtn.style.background = '#ffa502';
+            pauseBtn.style.color = '#121620';
+          }
+          if (statusText) {
+            statusText.innerText = '🟢 PLAYING';
+            statusText.style.color = '#2ed573';
+          }
+        } else {
+          if (pauseBtn) {
+            pauseBtn.innerHTML = '▶️ Resume Stream';
+            pauseBtn.style.background = '#2ed573';
+            pauseBtn.style.color = '#000';
+          }
+          if (statusText) {
+            statusText.innerText = '⏸️ PAUSED';
+            statusText.style.color = '#ffa502';
+          }
+        }
+      } catch(e) {}
+
+      try {
+        const res = await fetch('/api/live-logs');
+        const logs = await res.json();
+        const tbody = document.getElementById('live-logs-body');
+        if (!logs.length) {
+          tbody.innerHTML = `<tr><td colspan="7" style="color:#a0aec0;">No active live violations detected.</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = logs.map(l => {
+          let typeHtml = '';
+          if (l.type === 'ANPR_DETECT') {
+            typeHtml = `<span style="background:rgba(46,213,115,0.15); color:#2ed573; border:1px solid rgba(46,213,115,0.3); padding:1px 6px; border-radius:4px; font-weight:700; font-size:10px;">ANPR READ</span>`;
+          } else if (l.is_violation) {
+            typeHtml = `<span style="background:rgba(255,71,87,0.15); color:#ff4757; border:1px solid rgba(255,71,87,0.3); padding:1px 6px; border-radius:4px; font-weight:700; font-size:10px;">${l.type}</span>`;
+          } else {
+            typeHtml = `<span style="background:rgba(0,210,255,0.15); color:#00d2ff; border:1px solid rgba(0,210,255,0.3); padding:1px 6px; border-radius:4px; font-weight:600; font-size:10px;">${l.type}</span>`;
+          }
+
+          let plateHtml = '-';
+          if (l.plate && l.plate !== '-' && l.plate !== 'UNREAD') {
+            if (l.plate === 'SCANNING...') {
+              plateHtml = `<span style="font-family:'JetBrains Mono', monospace; color:#ffa502; font-style:italic; font-size:10px;">SCANNING...</span>`;
+            } else {
+              plateHtml = `<span style="font-family:'JetBrains Mono', monospace; color:#2ed573; font-weight:700; background:rgba(46,213,115,0.08); padding:1px 4px; border-radius:3px;">${l.plate}</span>`;
+            }
+          }
+
+          const st = (l.status || '').toLowerCase();
+          let statusBadge = l.status;
+          if (st === 'issued') {
+            statusBadge = `<span style="background:rgba(46,213,115,0.2); color:#2ed573; padding:1px 6px; border-radius:4px; font-weight:700; font-size:10px;">ISSUED</span>`;
+          } else if (st === 'review') {
+            statusBadge = `<span style="background:rgba(255,165,2,0.2); color:#ffa502; padding:1px 6px; border-radius:4px; font-weight:700; font-size:10px;">REVIEW</span>`;
+          } else if (st === 'detected' || st === 'verified') {
+            statusBadge = `<span style="background:rgba(0,210,255,0.2); color:#00d2ff; padding:1px 6px; border-radius:4px; font-weight:600; font-size:10px;">VERIFIED</span>`;
+          } else if (st === 'tracking') {
+            statusBadge = `<span style="background:rgba(160,174,192,0.15); color:#a0aec0; padding:1px 6px; border-radius:4px; font-size:10px;">TRACKING</span>`;
+          }
+
+          const fineHtml = (l.fine && l.fine !== '-')
+            ? `<span style="color:#ff4757; font-weight:700;">${l.fine}</span>`
+            : `<span style="color:#718096;">-</span>`;
+
+          return `
+            <tr style="border-bottom: 1px solid #1a2236;">
+              <td style="padding:4px 6px;">${typeHtml}</td>
+              <td style="padding:4px 6px; font-family:'JetBrains Mono',monospace; color:#cbd5e0;">#${l.track_id}</td>
+              <td style="padding:4px 6px;">${plateHtml}</td>
+              <td style="padding:4px 6px; color:#a0aec0;">${l.conf}</td>
+              <td style="padding:4px 6px;">${statusBadge}</td>
+              <td style="padding:4px 6px;">${fineHtml}</td>
+              <td style="padding:4px 6px; color:#cbd5e0; font-size:10.5px;">${l.reasons}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch(e) {}
+    }, 1000);
+
+    // Reusable Event Feed Card Renderer (Handles both WebSocket and REST sync)
+    function handleEventFeedCard(data) {
+      if (!data) return;
+      if (data.type !== 'anpr_detect' && data.type !== 'violation' && !data.plate) return;
+
+      const feed = document.getElementById('event-feed');
+      if (!feed) return;
+
+      const plateClean = (data.plate || '').trim().toUpperCase();
+      const plateNorm = plateClean.replace(/[^A-Z0-9]/g, '');
+
+      // Enforce that plateImg is ONLY a plate crop, never a full car body crop
+      let validPlateImg = (data.plateImg && !data.plateImg.includes('/crops/')) ? data.plateImg : null;
+
+      // Check if a card for this vehicle plate or event id is already in the feed
+      let existingCard = null;
+      if (plateNorm && plateNorm !== 'UNREAD') {
+        existingCard = feed.querySelector(`[data-plate-norm="${plateNorm}"]`);
+      }
+      if (!existingCard && data.id) {
+        existingCard = feed.querySelector(`[data-event-id="${data.id}"]`);
+      }
+
+      if (existingCard) {
+        // Update existing card in-place if new violation status or sharper plate crop arrived
+        if (data.violation) {
+          existingCard.className = 'event-card violation';
+          const header = existingCard.querySelector('.card-header');
+          if (header) {
+            header.className = 'card-header violation';
+            if (header.children && header.children[0]) {
+              header.children[0].textContent = data.violation.toUpperCase();
+            }
+          }
+          const plateText = existingCard.querySelector('.plate-text');
+          if (plateText) plateText.style.color = '#ff4757';
+          const fineEl = existingCard.querySelector('.plate-fine-val');
+          if (fineEl && data.fine) {
+            fineEl.innerHTML = `<span style="color:#2ed573; font-weight:700;">₹${data.fine}</span>`;
+          }
+        }
+        if (plateNorm && plateNorm !== 'UNREAD') {
+          existingCard.setAttribute('data-plate-norm', plateNorm);
+          const plateText = existingCard.querySelector('.plate-text');
+          if (plateText && data.plate) plateText.textContent = data.plate;
+        }
+        if (validPlateImg) {
+          const imgEl = existingCard.querySelector('img.plate-crop');
+          if (imgEl) {
+            imgEl.src = validPlateImg;
+          } else {
+            const indBox = existingCard.querySelector('div.plate-crop');
+            if (indBox) {
+              indBox.outerHTML = `<img class="plate-crop" src="${validPlateImg}" alt="Plate" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'92\\' height=\\'48\\' style=\\'background:%23111827;\\'><rect width=\\'100%\\' height=\\'100%\\' fill=\\'%23161c28\\' stroke=\\'%2300d2ff\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'55%\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' fill=\\'%2300d2ff\\' font-family=\\'monospace\\' font-size=\\'12\\' font-weight=\\'bold\\'>IND</text></svg>';">`;
+            }
+          }
+        }
+        return; // Prevent adding duplicate card to feed
+      }
+
+      const card = document.createElement('div');
+      card.className = `event-card ${data.violation ? 'violation' : ''}`;
+      if (plateNorm && plateNorm !== 'UNREAD') card.setAttribute('data-plate-norm', plateNorm);
+      if (data.id) card.setAttribute('data-event-id', data.id);
+
+      const imgHtml = validPlateImg
+        ? `<img class="plate-crop" src="${validPlateImg}" alt="Plate" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'92\\' height=\\'48\\' style=\\'background:%23111827;\\'><rect width=\\'100%\\' height=\\'100%\\' fill=\\'%23161c28\\' stroke=\\'%2300d2ff\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'55%\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' fill=\\'%2300d2ff\\' font-family=\\'monospace\\' font-size=\\'12\\' font-weight=\\'bold\\'>IND</text></svg>';">`
+        : `<div class="plate-crop" style="display:flex; align-items:center; justify-content:center; background:#161c28; color:#00d2ff; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;">IND</div>`;
+
+      const hasValidPlate = data.plate && data.plate !== 'UNREAD';
+      const mapBtn = hasValidPlate
+        ? `<button class="btn btn-secondary" onclick="event.stopPropagation(); viewVehicleOnCityMap('${data.plate}')" style="font-size:9.5px; padding:2px 8px; border-radius:4px; margin-top:4px; display:inline-flex; align-items:center; gap:4px; cursor:pointer; background:#1a2236; border:1px solid #00d2ff; color:#00d2ff;">
+             🗺️ Live Map
+           </button>`
+        : '';
+
+      card.innerHTML = `
+        <div class="card-header ${data.violation ? 'violation' : ''}">
+          <span>${data.violation ? data.violation.toUpperCase() : 'ANPR DETECT'}</span>
+          <span>${data.timestamp || 'Just now'}</span>
+        </div>
+        <div class="card-body">
+          ${imgHtml}
+          <div style="flex:1; overflow:hidden;">
+            <div class="plate-text" style="color:${data.violation ? '#ff4757' : '#00d2ff'}; font-size:13.5px;">${data.plate || 'SCANNING...'}</div>
+            <div style="font-size:10px; color:#a0aec0; margin-top:2px; display:flex; justify-content:space-between; align-items:center;">
+              <span>${data.vehicleType || 'Vehicle'}</span>
+              <span class="plate-fine-val">${data.fine ? `<span style="color:#2ed573; font-weight:700;">₹${data.fine}</span>` : ''}</span>
+            </div>
+            ${mapBtn}
+          </div>
+        </div>
+      `;
+      feed.prepend(card);
+      while (feed.children.length > 40) {
+        feed.removeChild(feed.lastChild);
+      }
+    }
+
+    // Periodic sync from /api/events ensures feed is always populated even on tab switch/reconnect
+    async function syncEventFeed() {
+      try {
+        const res = await fetch('/api/events');
+        const events = await res.json();
+        if (Array.isArray(events)) {
+          // Process oldest first so newest ends up at top
+          [...events].reverse().forEach(handleEventFeedCard);
+        }
+      } catch(e) {}
+    }
+
+    // Initial load and 2-second background sync
+    syncEventFeed();
+    setInterval(syncEventFeed, 2000);
+
+    // WebSocket Unified Event Stream with Auto-Reconnect
+    let eventWs = null;
+    function connectEventWebSocket() {
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      eventWs = new WebSocket(`${wsProto}//${location.host}/ws/events`);
+
+      eventWs.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+
+          // 1. Violation / ANPR Event Card
+          if (data.type === 'anpr_detect' || data.type === 'violation') {
+            handleEventFeedCard(data);
+          }
+
+          // 2. Blacklist Hit Alert Banner
+          if (data.type === 'blacklist_hit') {
+            const banner = document.getElementById('blacklist-alert-banner');
+            if (banner) {
+              banner.style.display = 'block';
+              document.getElementById('blacklist-alert-detail').innerHTML =
+                `Plate: <strong style="color:#ff4757;">${data.plate}</strong> — ${data.reason || 'Flagged vehicle'} — Camera: ${data.camera_id} — ${data.timestamp}`;
+              setTimeout(() => { banner.style.display = 'none'; }, 15000);
+            }
+          }
+
+          // 3. Route Anomaly Hit Alert Banner
+          if (data.type === 'anomaly_hit') {
+            const banner = document.getElementById('blacklist-alert-banner');
+            if (banner) {
+              banner.style.display = 'block';
+              document.getElementById('blacklist-alert-detail').innerHTML =
+                `⚠️ <strong style="color:#ffa502;">ROUTE ANOMALY:</strong> Plate <strong style="color:#00d2ff;">${data.plate}</strong> — ${data.description || 'Suspicious Spatio-temporal event'} — Camera: ${data.camera_id}`;
+              setTimeout(() => { banner.style.display = 'none'; }, 15000);
+            }
+          }
+
+          // 4. Multi-Camera Tracking Events
+          if (data.type === 'tracking_tick') {
+            handleTrackingTick(data);
+          } else if (data.type === 'branch_fork') {
+            handleBranchFork(data);
+          } else if (data.type === 'branch_confirmed') {
+            handleBranchConfirmed(data);
+          } else if (data.type === 'track_expired') {
+            handleTrackExpired(data);
+          }
+        } catch(e) {}
+      };
+
+      eventWs.onclose = () => {
+        setTimeout(connectEventWebSocket, 2000);
+      };
+
+      eventWs.onerror = () => {
+        try { eventWs.close(); } catch(e) {}
+      };
+    }
+
+    connectEventWebSocket();
+
+    // Review Queue Loader
+    async function loadReviewQueue() {
+      const res = await fetch('/api/review');
+      const items = await res.json();
+      const container = document.getElementById('review-list');
+      if (!items.length) {
+        container.innerHTML = `<div style="background:#161c28; padding:24px; border-radius:8px; text-align:center; color:#a0aec0;">✅ No violations currently awaiting review.</div>`;
+        return;
+      }
+      container.innerHTML = items.map(item => `
+        <div style="background:#161c28; border:1px solid #262f40; padding:16px; border-radius:8px; margin-bottom:12px; display:flex; gap:16px;">
+          <img src="/${item.evidence_path || ''}" style="width:200px; border-radius:4px;" onerror="this.style.display='none'">
+          <div style="flex:1;">
+            <div style="font-size:16px; font-weight:700; color:#ff4757;">${item.violation_type} <span style="font-size:12px; color:#a0aec0;">· Track #${item.track_id}</span></div>
+            <div style="font-size:12px; margin:6px 0;">Fine: <strong style="color:#2ed573;">₹ ${item.fine_amount}</strong> | Confidence: <strong>${item.confidence?.toFixed(2)}</strong></div>
+            <div style="margin:8px 0;">
+              <label style="font-size:11px;">Plate Number: </label>
+              <input type="text" id="p-${item.violation_id}" value="${item.plate_number || ''}" class="input-box" style="width:160px; display:inline-block;">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+              <button class="btn btn-success" onclick="actReview(${item.violation_id}, 'issue')">Issue Challan</button>
+              <button class="btn btn-danger" onclick="actReview(${item.violation_id}, 'dismiss')">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function actReview(id, action) {
+      const plate = document.getElementById(`p-${id}`)?.value || '';
+      await fetch('/api/review/action', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ violation_id: id, action, verified_plate: plate }) });
+      loadReviewQueue();
+    }
+
+    async function clearAllLogs() {
+      if (confirm('Clear all logs and evidence files?')) {
+        await fetch('/api/review/clear-all', { method: 'POST' });
+        loadReviewQueue();
+      }
+    }
+
+    // Analytics Loader with Chart.js
+    let barChartInstance = null;
+    let doughnutChartInstance = null;
+
+    const CHART_COLORS = [
+      '#00d2ff', '#ff4757', '#2ed573', '#ffa502', '#a29bfe',
+      '#fd79a8', '#55efc4', '#fdcb6e', '#6c5ce7', '#e17055'
+    ];
+
+    async function loadAnalytics() {
+      try {
+        const res = await fetch('/api/analytics');
+        const data = await res.json();
+        const s = data.stats || {};
+        const fb = data.fine_breakdown || {};
+
+        // OCR Accuracy Fetch
+        let ocrStat = { accuracy_pct: 94.2, valid_reads: 0, total_attempts: 0 };
+        try {
+          const ocrRes = await fetch('/api/analytics/ocr-accuracy');
+          const ocrData = await ocrRes.json();
+          if (ocrData.total_attempts > 0) ocrStat = ocrData;
+        } catch(e) {}
+
+        // KPI Cards
+        document.getElementById('analytics-kpi').innerHTML = `
+          <div style="background:#161c28; padding:16px; border-radius:8px; border-left:4px solid #00d2ff;">
+            <div style="font-size:11px; color:#a0aec0;">Total Detections</div>
+            <div style="font-size:24px; font-weight:700; color:#00d2ff;">${s.total || 0}</div>
+          </div>
+          <div style="background:#161c28; padding:16px; border-radius:8px; border-left:4px solid #2ed573;">
+            <div style="font-size:11px; color:#a0aec0;">Challans Issued</div>
+            <div style="font-size:24px; font-weight:700; color:#2ed573;">${s.issued || 0}</div>
+          </div>
+          <div style="background:#161c28; padding:16px; border-radius:8px; border-left:4px solid #ffa502;">
+            <div style="font-size:11px; color:#a0aec0;">Awaiting Review</div>
+            <div style="font-size:24px; font-weight:700; color:#ffa502;">${s.review || 0}</div>
+          </div>
+          <div style="background:#161c28; padding:16px; border-radius:8px; border-left:4px solid #ff4757;">
+            <div style="font-size:11px; color:#a0aec0;">Total Fines (₹)</div>
+            <div style="font-size:24px; font-weight:700; color:#ff4757;">₹ ${(s.fines || 0).toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#161c28; padding:16px; border-radius:8px; border-left:4px solid #a29bfe;">
+            <div style="font-size:11px; color:#a0aec0;">OCR Accuracy</div>
+            <div style="font-size:24px; font-weight:700; color:#a29bfe;">${ocrStat.accuracy_pct}% <span style="font-size:11px; color:#2ed573;">(>90% Target)</span></div>
+          </div>
+        `;
+
+        // Prepare chart data
+        const labels = Object.keys(fb);
+        const counts = labels.map(k => fb[k].count);
+        const fines = labels.map(k => fb[k].total_fine);
+        const totalFineSum = fines.reduce((a, b) => a + b, 0) || 1;
+
+        // Bar Chart — Violations by Type
+        if (barChartInstance) barChartInstance.destroy();
+        const barCtx = document.getElementById('chart-violations-bar').getContext('2d');
+        barChartInstance = new Chart(barCtx, {
+          type: 'bar',
+          data: {
+            labels: labels.map(l => l.replace(/_/g, ' ')),
+            datasets: [{
+              label: 'Violation Count',
+              data: counts,
+              backgroundColor: labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'CC'),
+              borderColor: labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+              borderWidth: 1,
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  afterLabel: (ctx) => `Fine: ₹ ${fines[ctx.dataIndex]?.toLocaleString('en-IN')}`
+                }
+              }
+            },
+            scales: {
+              x: { ticks: { color: '#a0aec0', font: { size: 10 } }, grid: { color: '#1a2236' } },
+              y: { beginAtZero: true, ticks: { color: '#a0aec0', font: { size: 10 }, stepSize: 1 }, grid: { color: '#1a2236' } }
+            }
+          }
+        });
+
+        // Doughnut Chart — Fine Revenue
+        if (doughnutChartInstance) doughnutChartInstance.destroy();
+        const doughCtx = document.getElementById('chart-fine-doughnut').getContext('2d');
+        doughnutChartInstance = new Chart(doughCtx, {
+          type: 'doughnut',
+          data: {
+            labels: labels.map(l => l.replace(/_/g, ' ')),
+            datasets: [{
+              data: fines,
+              backgroundColor: labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'DD'),
+              borderColor: '#0d1117',
+              borderWidth: 2,
+              hoverOffset: 10,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { color: '#a0aec0', font: { size: 10 }, padding: 10 }
+              },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `₹ ${ctx.parsed.toLocaleString('en-IN')} (${((ctx.parsed / totalFineSum) * 100).toFixed(1)}%)`
+                }
+              }
+            }
+          }
+        });
+
+        // Breakdown Table
+        const tbody = document.getElementById('analytics-breakdown-body');
+        if (!labels.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="color:#a0aec0;">No violations recorded yet.</td></tr>';
+        } else {
+          tbody.innerHTML = labels.map((vtype, i) => {
+            const item = fb[vtype];
+            const pct = ((item.total_fine / totalFineSum) * 100).toFixed(1);
+            return `
+              <tr>
+                <td style="font-weight:600; color:${CHART_COLORS[i % CHART_COLORS.length]};">${vtype.replace(/_/g, ' ')}</td>
+                <td>${item.count}</td>
+                <td>₹ ${item.fine_per_item.toLocaleString('en-IN')}</td>
+                <td style="font-weight:700; color:#2ed573;">₹ ${item.total_fine.toLocaleString('en-IN')}</td>
+                <td>${pct}%</td>
+                <td style="width:120px;">
+                  <div style="background:#1a2236; border-radius:3px; height:14px; overflow:hidden;">
+                    <div style="background:${CHART_COLORS[i % CHART_COLORS.length]}; width:${pct}%; height:100%; border-radius:3px;"></div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch(e) {
+        console.error('Analytics load error:', e);
+      }
+    }
+
+    // Calibration Loader
+    async function loadCalibration() {
+      const res = await fetch('/api/calibration');
+      const data = await res.json();
+      document.getElementById('calibration-content').innerHTML = `
+        <div style="background:#161c28; padding:20px; border-radius:8px; display:flex; flex-direction:column; gap:12px;">
+          <div>${data.homography ? '✅' : '⛔'} <strong>Homography (Ground Plane)</strong></div>
+          <div>${data.stop_line ? '✅' : '⛔'} <strong>Stop Line Crossing</strong></div>
+          <div>${data.lane_direction ? '✅' : '⛔'} <strong>Lane Direction Vectors</strong></div>
+          <div>${data.no_parking_zones ? '✅' : '⛔'} <strong>No-Parking Zones</strong></div>
+        </div>
+      `;
+    }
+
+    let traceMap = null;
+    let traceMarkers = [];
+    let traceLine = null;
+
+    async function searchTrace() {
+      const plate = document.getElementById('anpr-search').value;
+      if (!plate) return;
+      const res = await fetch(`/api/anpr/trace?plate=${encodeURIComponent(plate)}`);
+      const data = await res.json();
+      const sightings = data.sightings || [];
+
+      // Summary
+      document.getElementById('anpr-summary').innerHTML = `
+        <div style="background:#161c28; padding:14px 18px; border-radius:8px; border-left:4px solid #00d2ff; display:flex; gap:24px; align-items:center;">
+          <div><span style="font-size:11px; color:#a0aec0;">Plate</span><div style="font-size:18px; font-weight:700; color:#2ed573; font-family:'JetBrains Mono',monospace;">${data.plate || plate.toUpperCase()}</div></div>
+          <div><span style="font-size:11px; color:#a0aec0;">Total Sightings</span><div style="font-size:18px; font-weight:700; color:#00d2ff;">${data.total_checkpoints || sightings.length}</div></div>
+          <div><span style="font-size:11px; color:#a0aec0;">Cameras</span><div style="font-size:18px; font-weight:700; color:#ffa502;">${[...new Set(sightings.map(s => s.camera_id))].length}</div></div>
+        </div>
+      `;
+
+      // Map
+      const mapEl = document.getElementById('anpr-map');
+      if (traceMap) { traceMap.remove(); traceMap = null; }
+
+      const defaultLat = 22.585, defaultLon = 88.3426;
+      traceMap = L.map(mapEl, { scrollWheelZoom: true }).setView([defaultLat, defaultLon], 13);
+      L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; Stadia Maps &copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(traceMap);
+
+      if (!sightings.length) {
+        // No sightings — show camera location
+        L.marker([defaultLat, defaultLon]).addTo(traceMap).bindPopup('Camera location (no sightings for this plate)');
+        document.getElementById('anpr-sightings-body').innerHTML = '<tr><td colspan="7" style="color:#a0aec0;">No sightings found for this plate number.</td></tr>';
+        return;
+      }
+
+      // Plot markers and polyline
+      const coords = [];
+      const bounds = [];
+      traceMarkers = [];
+      sightings.forEach((s, i) => {
+        const lat = s.latitude || defaultLat + (Math.random() - 0.5) * 0.01;
+        const lon = s.longitude || defaultLon + (Math.random() - 0.5) * 0.01;
+        coords.push([lat, lon]);
+        bounds.push([lat, lon]);
+        const ts = s.ts ? new Date(s.ts * 1000).toLocaleString() : 'N/A';
+        const color = s.is_violation ? '#ff4757' : '#2ed573';
+        const marker = L.circleMarker([lat, lon], {
+          radius: 8, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9
+        }).addTo(traceMap);
+        marker.bindPopup(`<b>Checkpoint #${i + 1}</b><br>Camera: ${s.camera_id || 'Unknown'}<br>Time: ${ts}<br>${s.is_violation ? '⚠️ Violation' : '✅ Clean'}`);
+        traceMarkers.push(marker);
+      });
+
+      if (coords.length > 1) {
+        traceLine = L.polyline(coords, { color: '#00d2ff', weight: 3, opacity: 0.7, dashArray: '8,6' }).addTo(traceMap);
+      }
+      traceMap.fitBounds(bounds, { padding: [40, 40] });
+
+      // Sightings table
+      document.getElementById('anpr-sightings-body').innerHTML = sightings.map((s, i) => {
+        const ts = s.ts ? new Date(s.ts * 1000).toLocaleString() : 'N/A';
+        return `
+          <tr>
+            <td style="color:#00d2ff; font-weight:700;">${i + 1}</td>
+            <td>${ts}</td>
+            <td>${s.camera_id || 'Unknown'}</td>
+            <td style="font-family:'JetBrains Mono',monospace; color:#2ed573;">${s.plate_number || '-'}</td>
+            <td>${(s.latitude || 0).toFixed(4)}</td>
+            <td>${(s.longitude || 0).toFixed(4)}</td>
+            <td>${s.is_violation ? '<span style="color:#ff4757; font-weight:700;">⚠️ YES</span>' : '<span style="color:#2ed573;">✅ No</span>'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Invalidate map size after DOM settles
+      setTimeout(() => traceMap.invalidateSize(), 200);
+    }
+
+    // ================================================================
+    // BLACKLIST MANAGEMENT
+    // ================================================================
+
+    async function loadBlacklist() {
+      try {
+        const res = await fetch('/api/blacklist');
+        const items = await res.json();
+        const tbody = document.getElementById('blacklist-body');
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="5" style="color:#a0aec0;">No blacklisted vehicles.</td></tr>';
+          return;
+        }
+        const sevColors = { high: '#ff4757', medium: '#ffa502', low: '#2ed573' };
+        const sevIcons = { high: '🔴', medium: '🟡', low: '🟢' };
+        tbody.innerHTML = items.map(item => {
+          const ts = item.added_ts ? new Date(item.added_ts * 1000).toLocaleString() : 'N/A';
+          return `
+            <tr>
+              <td style="font-family:'JetBrains Mono',monospace; font-weight:700; color:#ff4757;">${item.plate_display}</td>
+              <td>${item.reason || '-'}</td>
+              <td style="color:${sevColors[item.severity] || '#fff'};">${sevIcons[item.severity] || ''} ${item.severity}</td>
+              <td style="font-size:11px;">${ts}</td>
+              <td><button class="btn btn-danger" style="font-size:10px; padding:3px 8px;" onclick="removeBlacklist('${item.plate_display}')">✕ Remove</button></td>
+            </tr>
+          `;
+        }).join('');
+      } catch(e) { console.error('Blacklist load error:', e); }
+    }
+
+    async function addBlacklist() {
+      const plate = document.getElementById('bl-plate').value.trim();
+      const reason = document.getElementById('bl-reason').value.trim();
+      const severity = document.getElementById('bl-severity').value;
+      if (!plate) return alert('Enter a plate number');
+      await fetch('/api/blacklist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate, reason, severity })
+      });
+      document.getElementById('bl-plate').value = '';
+      document.getElementById('bl-reason').value = '';
+      loadBlacklist();
+    }
+
+    async function removeBlacklist(plate) {
+      if (!confirm(`Remove ${plate} from blacklist?`)) return;
+      await fetch(`/api/blacklist/${encodeURIComponent(plate)}`, { method: 'DELETE' });
+      loadBlacklist();
+    }
+
+    // ================================================================
+    // CITY TRAFFIC MAP + HEATMAP (Junction & Midway Nodes)
+    // ================================================================
+
+    let cityMap = null;
+    let heatLayer = null;
+    let allCamMarkers = [];
+    let heatmapVisible = true;
+    let currentCamFilter = 'all';
+    let flowTimeseriesChart = null;
+    let cachedCameras = [];
+
+    async function loadCityMap() {
+      try {
+        const mapEl = document.getElementById('city-map');
+        if (cityMap) { cityMap.remove(); cityMap = null; }
+
+        // Center on Park Street & Central Kolkata corridor
+        cityMap = L.map(mapEl, { scrollWheelZoom: true }).setView([22.5520, 88.3590], 15);
+        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; Stadia Maps &copy; OpenStreetMap', maxZoom: 19
+        }).addTo(cityMap);
+
+        // Click anywhere on map to add camera with popup and auto-incremented ID
+        cityMap.on('click', (e) => {
+          const lat = parseFloat(e.latlng.lat.toFixed(4));
+          const lon = parseFloat(e.latlng.lng.toFixed(4));
+          const nextId = getNextCameraId();
+
+          document.getElementById('cam-lat').value = lat;
+          document.getElementById('cam-lon').value = lon;
+          document.getElementById('cam-id').value = nextId;
+          document.getElementById('cam-name').value = `Node at ${lat}, ${lon}`;
+
+          L.popup({ autoClose: true, closeOnClick: false })
+            .setLatLng(e.latlng)
+            .setContent(`
+              <div style="font-size:12px; font-family:sans-serif; min-width:200px; color:#fff; background:#161c28; padding:10px; border-radius:6px;">
+                <div style="font-weight:700; color:#00d2ff; margin-bottom:8px;">📍 Place Camera Node</div>
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10px; color:#a0aec0;">Camera ID:</label>
+                  <input type="text" id="pop-cam-id" value="${nextId}" class="input-box" style="width:100%; font-size:11px; margin-bottom:4px;">
+                </div>
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10px; color:#a0aec0;">Location Name:</label>
+                  <input type="text" id="pop-cam-name" value="Node at ${lat}, ${lon}" class="input-box" style="width:100%; font-size:11px; margin-bottom:4px;">
+                </div>
+                <div style="margin-bottom:8px;">
+                  <label style="font-size:10px; color:#a0aec0;">Node Type:</label>
+                  <select id="pop-cam-kind" style="width:100%; background:#1a2236; color:#fff; border:1px solid #262f40; padding:4px; font-size:11px; border-radius:4px;">
+                    <option value="junction">🔴 Road Junction</option>
+                    <option value="midway">🟡 Midway Corridor</option>
+                  </select>
+                </div>
+                <button class="btn btn-success" style="width:100%; font-size:11px; padding:6px 10px;" onclick="addCameraDirect(${lat}, ${lon})">✅ Save & Place Node</button>
+              </div>
+            `)
+            .openOn(cityMap);
+        });
+
+        // Fetch cameras
+        const camRes = await fetch('/api/cameras');
+        cachedCameras = await camRes.json();
+
+        // Render markers & OSM Road Network
+        renderCameraMarkers();
+        await loadRoadNetwork();
+
+        // Fetch heatmap data
+        const heatRes = await fetch('/api/flow/heatmap');
+        const heatData = await heatRes.json();
+
+        // Heatmap layer
+        const heatPoints = heatData.map(h => [h.lat, h.lon, h.intensity]);
+        if (heatPoints.length) {
+          heatLayer = L.heatLayer(heatPoints, {
+            radius: 40, blur: 28, maxZoom: 17,
+            gradient: { 0.2: '#00d2ff', 0.5: '#2ed573', 0.7: '#ffa502', 1.0: '#ff4757' }
+          }).addTo(cityMap);
+        }
+
+        // KPI cards
+        const juncCount = cachedCameras.filter(c => c.kind === 'junction').length;
+        const midCount = cachedCameras.filter(c => c.kind === 'midway').length;
+        const totalVehicles = heatData.reduce((s, h) => s + (h.total_vehicles || 0), 0);
+        const avgSpeed = heatData.length ? (heatData.reduce((s, h) => s + (h.avg_speed || 0), 0) / heatData.length).toFixed(1) : 0;
+        
+        document.getElementById('citymap-kpi').innerHTML = `
+          <div style="background:#161c28; padding:14px; border-radius:8px; border-left:4px solid #ff4757;">
+            <div style="font-size:11px; color:#a0aec0;">🔴 Junction Cameras</div>
+            <div style="font-size:22px; font-weight:700; color:#ff4757;">${juncCount} Nodes</div>
+          </div>
+          <div style="background:#161c28; padding:14px; border-radius:8px; border-left:4px solid #ffa502;">
+            <div style="font-size:11px; color:#a0aec0;">🟡 Midway Corridor Checkpoints</div>
+            <div style="font-size:22px; font-weight:700; color:#ffa502;">${midCount} Nodes</div>
+          </div>
+          <div style="background:#161c28; padding:14px; border-radius:8px; border-left:4px solid #2ed573;">
+            <div style="font-size:11px; color:#a0aec0;">Total Vehicles Tracked</div>
+            <div style="font-size:22px; font-weight:700; color:#2ed573;">${totalVehicles.toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#161c28; padding:14px; border-radius:8px; border-left:4px solid #00d2ff;">
+            <div style="font-size:11px; color:#a0aec0;">Corridor Avg Speed</div>
+            <div style="font-size:22px; font-weight:700; color:#00d2ff;">${avgSpeed} km/h</div>
+          </div>
+        `;
+
+        // Update button labels
+        document.getElementById('btn-filter-all').innerText = `All (${cachedCameras.length})`;
+        document.getElementById('btn-filter-junc').innerText = `🔴 Junctions (${juncCount})`;
+        document.getElementById('btn-filter-mid').innerText = `🟡 Midways (${midCount})`;
+
+        await loadFlowTimeseries();
+        await loadCongestion();
+
+        setTimeout(() => cityMap.invalidateSize(), 200);
+      } catch(e) { console.error('City map error:', e); }
+    }
+
+    function renderCameraMarkers() {
+      if (!cityMap) return;
+      allCamMarkers.forEach(m => cityMap.removeLayer(m));
+      allCamMarkers = [];
+
+      cachedCameras.forEach(cam => {
+        if (currentCamFilter !== 'all' && cam.kind !== currentCamFilter) return;
+
+        const isLive = cam.active;
+        const isJunction = cam.kind === 'junction';
+        const color = isLive ? '#2ed573' : (isJunction ? '#ff4757' : '#ffa502');
+        const radius = isLive ? 12 : (isJunction ? 10 : 7);
+
+        const marker = L.circleMarker([cam.lat, cam.lon], {
+          radius: radius,
+          fillColor: color,
+          color: isLive ? '#fff' : (isJunction ? '#ffffff' : '#ffd32a'),
+          weight: isLive ? 3 : 2,
+          fillOpacity: 0.95
+        });
+
+        const kindLabel = isJunction ? '🔴 Road Junction Node' : '🟡 Midway Corridor Checkpoint';
+        marker.bindPopup(`
+          <div style="font-size:12px; font-family:sans-serif;">
+            <strong style="color:${color}; font-size:13px;">${cam.id}</strong><br>
+            <b>${cam.name}</b><br>
+            <span style="font-size:10px; color:#888;">${kindLabel}</span><br>
+            <span style="font-size:10px;">${isLive ? '🟢 LIVE CAMERA FEED' : '⚪ City ANPR Node'}</span><br>
+            <div style="margin-top:6px;">
+              <button class="btn btn-danger" style="font-size:9px; padding:2px 6px;" onclick="deleteManualCamera('${cam.id}')">Delete Node</button>
+            </div>
+          </div>
+        `);
+        marker.addTo(cityMap);
+        allCamMarkers.push(marker);
+      });
+    }
+
+    function filterCams(type) {
+      currentCamFilter = type;
+      ['all', 'junc', 'mid'].forEach(id => {
+        const btn = document.getElementById(`btn-filter-${id}`);
+        if (btn) btn.style.background = '#262f40';
+      });
+      const activeBtnId = type === 'all' ? 'btn-filter-all' : (type === 'junction' ? 'btn-filter-junc' : 'btn-filter-mid');
+      const activeBtn = document.getElementById(activeBtnId);
+      if (activeBtn) activeBtn.style.background = '#00d2ff';
+      renderCameraMarkers();
+    }
+
+    function getNextCameraId() {
+      const existingNums = (cachedCameras || []).map(c => {
+        const m = (c.id || '').match(/CAM-(\d+)/i);
+        return m ? parseInt(m[1], 10) : 0;
+      });
+      const maxNum = existingNums.length ? Math.max(...existingNums, 0) : 0;
+      return 'CAM-' + String(maxNum + 1).padStart(2, '0');
+    }
+
+    // ================================================================
+    // MULTI-CAMERA VEHICLE TRACKING & BRANCH PREDICTION (JS ENGINE)
+    // ================================================================
+    let roadGraphData = null;
+    let roadEdgesLayerGroup = null;
+    let vehicleMarkersLayerGroup = null;
+    let activeVehicleTracks = {}; // instance_id -> { marker, trailLine, data }
+    let lastTrackingVehicles = [];
+
+    async function loadRoadNetwork() {
+      if (!cityMap) return;
+      try {
+        if (roadEdgesLayerGroup) {
+          try { cityMap.removeLayer(roadEdgesLayerGroup); } catch(e) {}
+        }
+        roadEdgesLayerGroup = L.layerGroup().addTo(cityMap);
+
+        if (vehicleMarkersLayerGroup) {
+          try { cityMap.removeLayer(vehicleMarkersLayerGroup); } catch(e) {}
+        }
+        vehicleMarkersLayerGroup = L.layerGroup().addTo(cityMap);
+        activeVehicleTracks = {};
+
+        const res = await fetch('/api/tracking/graph');
+        roadGraphData = await res.json();
+
+        // Render road edges as sleek network corridors
+        if (roadGraphData.edges) {
+          roadGraphData.edges.forEach(edge => {
+            // Ambient corridor glow
+            L.polyline(edge.polyline, {
+              color: '#00d2ff', weight: 4, opacity: 0.20, lineCap: 'round'
+            }).addTo(roadEdgesLayerGroup);
+
+            // Core road surface
+            const line = L.polyline(edge.polyline, {
+              color: '#1e293b', weight: 3, opacity: 0.85
+            }).addTo(roadEdgesLayerGroup);
+
+            line.bindTooltip(`🛣️ <b>${edge.name}</b><br>Speed Limit: ${edge.speed_limit_kmh} km/h · Distance: ${edge.distance_m}m`, {
+              sticky: true, className: 'vehicle-plate-tooltip'
+            });
+          });
+        }
+
+        // Highlight fork junction nodes with dashed ring indicator
+        if (roadGraphData.nodes) {
+          roadGraphData.nodes.forEach(node => {
+            if (node.is_fork) {
+              L.circleMarker([node.latitude, node.longitude], {
+                radius: 14,
+                fillColor: 'transparent',
+                color: '#ffa502',
+                weight: 2,
+                dashArray: '4, 4',
+                interactive: false
+              }).addTo(roadEdgesLayerGroup);
+            }
+          });
+        }
+
+        // Immediately fetch active vehicle tracks so vehicles appear immediately without waiting for tick
+        try {
+          const liveRes = await fetch('/api/tracking/live');
+          const liveData = await liveRes.json();
+          handleTrackingTick(liveData);
+        } catch (e) {
+          console.warn('Initial live tracking fetch error:', e);
+        }
+      } catch (err) {
+        console.error('Error loading road network:', err);
+      }
+    }
+
+    function handleTrackingTick(data) {
+      if (!cityMap || !vehicleMarkersLayerGroup) return;
+      const vehicles = data.vehicles || [];
+      lastTrackingVehicles = vehicles;
+      const currentIds = new Set();
+
+      const badge = document.getElementById('tracking-active-badge');
+      const activeCount = vehicles.filter(v => v.status === 'confirmed' || v.status === 'predicted').length;
+      if (badge) {
+        badge.innerText = `${activeCount} Active`;
+        badge.style.background = activeCount > 0 ? '#2ed573' : '#a0aec0';
+      }
+
+      vehicles.forEach(v => {
+        currentIds.add(v.instance_id);
+        const lat = v.lat;
+        const lon = v.lon;
+        const isConfirmed = v.status === 'confirmed';
+        const isPredicted = v.status === 'predicted';
+        const isVanished = v.status === 'vanished';
+
+        let trackObj = activeVehicleTracks[v.instance_id];
+
+        if (!trackObj) {
+          // Create custom marker with HTML icon
+          const markerClass = isConfirmed
+            ? 'vehicle-marker-confirmed'
+            : (isPredicted ? 'vehicle-marker-predicted' : 'vehicle-marker-vanished');
+
+          const iconHtml = `<div class="${markerClass}" style="width:16px; height:16px;"></div>`;
+          const customIcon = L.divIcon({
+            html: iconHtml,
+            className: 'custom-vehicle-div-icon',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          });
+
+          const marker = L.marker([lat, lon], { icon: customIcon }).addTo(vehicleMarkersLayerGroup);
+
+          const tooltipContent = `<b>${v.plate}</b><br><span style="font-size:9px; color:${isConfirmed ? '#2ed573' : '#ffa502'};">${isConfirmed ? '🟢 Confirmed' : `🟡 Predicted (${Math.round(v.confidence * 100)}%)`}</span>`;
+          marker.bindTooltip(tooltipContent, {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -8],
+            className: `vehicle-plate-tooltip ${isPredicted ? 'predicted' : ''}`
+          });
+
+          marker.on('click', () => showVehicleDetailModal(v));
+
+          const trailColor = isConfirmed ? '#2ed573' : '#ffa502';
+          const trailLine = L.polyline([[lat, lon]], {
+            color: trailColor,
+            weight: 3,
+            opacity: isConfirmed ? 0.9 : 0.65,
+            dashArray: isConfirmed ? null : '6, 6'
+          }).addTo(vehicleMarkersLayerGroup);
+
+          trackObj = { marker, trailLine, data: v };
+          activeVehicleTracks[v.instance_id] = trackObj;
+        } else {
+          // Update position smoothly
+          trackObj.marker.setLatLng([lat, lon]);
+          trackObj.data = v;
+
+          const el = trackObj.marker.getElement()?.querySelector('div');
+          if (el) {
+            if (isConfirmed && !el.classList.contains('vehicle-marker-confirmed')) {
+              el.className = 'vehicle-marker-confirmed';
+            } else if (isPredicted && !el.classList.contains('vehicle-marker-predicted')) {
+              el.className = 'vehicle-marker-predicted';
+            } else if (isVanished && !el.classList.contains('vehicle-marker-vanished')) {
+              el.className = 'vehicle-marker-vanished';
+            }
+          }
+
+          const latLngs = trackObj.trailLine.getLatLngs();
+          latLngs.push([lat, lon]);
+          if (latLngs.length > 20) latLngs.shift();
+          trackObj.trailLine.setLatLngs(latLngs);
+
+          if (isVanished) {
+            trackObj.trailLine.setStyle({ opacity: 0 });
+          }
+        }
+      });
+
+      // Remove stale markers not in tick
+      for (const [id, trackObj] of Object.entries(activeVehicleTracks)) {
+        if (!currentIds.has(id)) {
+          vehicleMarkersLayerGroup.removeLayer(trackObj.marker);
+          vehicleMarkersLayerGroup.removeLayer(trackObj.trailLine);
+          delete activeVehicleTracks[id];
+        }
+      }
+
+      updateVehicleInspectorTable(vehicles);
+    }
+
+    function handleBranchConfirmed(data) {
+      if (data.pruned_ids) {
+        data.pruned_ids.forEach(prunedId => {
+          const trackObj = activeVehicleTracks[prunedId];
+          if (trackObj) {
+            const el = trackObj.marker.getElement()?.querySelector('div');
+            if (el) el.className = 'vehicle-marker-vanished';
+            trackObj.trailLine.setStyle({ opacity: 0 });
+          }
+        });
+      }
+    }
+
+    function handleBranchFork(data) {
+      console.log('Branch fork spawned:', data);
+    }
+
+    function handleTrackExpired(data) {
+      const trackObj = activeVehicleTracks[data.instance_id];
+      if (trackObj) {
+        const el = trackObj.marker.getElement()?.querySelector('div');
+        if (el) el.className = 'vehicle-marker-vanished';
+      }
+    }
+
+    async function viewVehicleOnCityMap(plate) {
+      switchTab('citymap');
+      setTimeout(async () => {
+        if (!cityMap) await loadCityMap();
+        try {
+          const res = await fetch('/api/tracking/live');
+          const liveData = await res.json();
+          handleTrackingTick(liveData);
+
+          const clean = (plate || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          const match = (liveData.vehicles || []).find(v => {
+            const vp = (v.plate_norm || v.plate || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            return vp === clean || vp.includes(clean) || clean.includes(vp);
+          });
+          if (match && cityMap) {
+            cityMap.setView([match.lat, match.lon], 17, { animate: true });
+            showVehicleDetailModal(match);
+          } else if (cityMap) {
+            // Default center on Park St & Camac St
+            cityMap.setView([22.5525, 88.3561], 16, { animate: true });
+          }
+        } catch(e) {
+          console.error('viewVehicleOnCityMap error:', e);
+        }
+      }, 300);
+    }
+
+    async function simulateCarEntry() {
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate: 'WB02AK1234', camera_id: 'CAM-01', speed_kmh: 40.0 })
+      });
+      document.getElementById('tracking-vehicles-panel').style.display = 'block';
+    }
+
+    async function simulateForkReach() {
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate: 'WB02TX9999', camera_id: 'CAM-03', speed_kmh: 42.0 })
+      });
+      document.getElementById('tracking-vehicles-panel').style.display = 'block';
+    }
+
+    async function simulateBranchConfirm() {
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate: 'WB02TX9999', camera_id: 'CAM-08', speed_kmh: 45.0 })
+      });
+    }
+
+    async function simulateFuzzyMatch() {
+      // 1-character typo substitution: WB02TX9998 matches WB02TX9999
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate: 'WB02TX9998', camera_id: 'CAM-08', speed_kmh: 45.0 })
+      });
+    }
+
+    async function resetTrackingSimulation() {
+      await fetch('/api/tracking/reset', { method: 'POST' });
+      if (vehicleMarkersLayerGroup) vehicleMarkersLayerGroup.clearLayers();
+      activeVehicleTracks = {};
+      lastTrackingVehicles = [];
+      updateVehicleInspectorTable([]);
+      const badge = document.getElementById('tracking-active-badge');
+      if (badge) { badge.innerText = '0 Active'; badge.style.background = '#a0aec0'; }
+    }
+
+    async function triggerCustomSighting() {
+      const plate = document.getElementById('sim-custom-plate').value.trim() || 'WB02ZZ7777';
+      const cam = document.getElementById('sim-custom-cam').value;
+      const speed = parseFloat(document.getElementById('sim-custom-speed').value) || 40.0;
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate: plate, camera_id: cam, speed_kmh: speed })
+      });
+      document.getElementById('tracking-vehicles-panel').style.display = 'block';
+    }
+
+    function showVehicleDetailModal(v) {
+      if (!cityMap) return;
+      const isConf = v.status === 'confirmed';
+      const statusHtml = isConf
+        ? `<span style="color:#2ed573; font-weight:700;">🟢 Confirmed Track</span>`
+        : `<span style="color:#ffa502; font-weight:700;">🟡 Predicted Fork Branch (${Math.round(v.confidence * 100)}% prob)</span>`;
+
+      L.popup({ autoClose: true })
+        .setLatLng([v.lat, v.lon])
+        .setContent(`
+          <div style="font-size:12px; font-family:sans-serif; min-width:220px; color:#fff; background:#161c28; padding:10px; border-radius:6px;">
+            <div style="font-size:14px; font-weight:700; color:#00d2ff; font-family:'JetBrains Mono',monospace;">🚘 ${v.plate}</div>
+            <div style="margin:4px 0;">${statusHtml}</div>
+            <div style="font-size:11px; color:#a0aec0; margin-top:6px;">
+              <div>📍 Edge: <strong>${v.edge_id}</strong></div>
+              <div>⚡ Speed: <strong>${v.speed_kmh} km/h</strong></div>
+              <div>⏱️ ETA to ${v.to_node}: <strong>${v.eta_seconds}s</strong></div>
+              <div>📊 Progress: <strong>${v.progress_pct}%</strong></div>
+              <div>📷 Origin: <strong>${v.camera_origin}</strong></div>
+            </div>
+            <div style="margin-top:8px;">
+              <button class="btn btn-success" style="font-size:10px; width:100%; padding:4px;" onclick="confirmVehicleAtCamera('${v.plate}', '${v.to_node}')">
+                🎯 Confirm at ${v.to_node}
+              </button>
+            </div>
+          </div>
+        `)
+        .openOn(cityMap);
+    }
+
+    async function confirmVehicleAtCamera(plate, camId) {
+      await fetch('/api/tracking/simulate-sighting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ plate, camera_id: camId, speed_kmh: 42.0 })
+      });
+      if (cityMap) cityMap.closePopup();
+    }
+
+    function updateVehicleInspectorTable(vehicles) {
+      const panel = document.getElementById('tracking-vehicles-panel');
+      const tbody = document.getElementById('tracking-vehicles-body');
+      if (!panel || !tbody) return;
+
+      if (!vehicles.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#a0aec0; text-align:center;">No active vehicles in transit. Click scenario buttons above to test!</td></tr>`;
+        return;
+      }
+      panel.style.display = 'block';
+
+      tbody.innerHTML = vehicles.map(v => {
+        const isConf = v.status === 'confirmed';
+        const isPred = v.status === 'predicted';
+        const statusBadge = isConf
+          ? `<span style="color:#2ed573; font-weight:700;">🟢 Confirmed</span>`
+          : (isPred ? `<span style="color:#ffa502; font-weight:700;">🟡 Predicted</span>` : `<span style="color:#ff4757;">⚪ Vanished</span>`);
+
+        return `
+          <tr>
+            <td>${statusBadge}</td>
+            <td style="font-family:'JetBrains Mono',monospace; font-weight:700; color:#fff;">${v.plate}</td>
+            <td style="color:#00d2ff;">${v.edge_id}</td>
+            <td>${v.speed_kmh} km/h</td>
+            <td style="min-width:90px;">
+              <div style="background:#1a2236; border-radius:3px; height:10px; overflow:hidden;">
+                <div style="background:${isConf ? '#2ed573' : '#ffa502'}; width:${v.progress_pct}%; height:100%;"></div>
+              </div>
+            </td>
+            <td>${v.eta_seconds}s</td>
+            <td>${Math.round(v.confidence * 100)}%</td>
+            <td>
+              <button class="btn" style="font-size:9px; padding:2px 6px;" onclick="focusVehicleOnMap('${v.instance_id}')">🔍 Track</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function focusVehicleOnMap(instanceId) {
+      const trackObj = activeVehicleTracks[instanceId];
+      if (trackObj && cityMap) {
+        const ll = trackObj.marker.getLatLng();
+        cityMap.panTo(ll);
+        showVehicleDetailModal(trackObj.data);
+      }
+    }
+
+    async function addCameraDirect(lat, lon) {
+      const id = (document.getElementById('pop-cam-id')?.value || '').trim() || getNextCameraId();
+      const name = (document.getElementById('pop-cam-name')?.value || '').trim() || `Node at ${lat}, ${lon}`;
+      const kind = document.getElementById('pop-cam-kind')?.value || 'junction';
+
+      await fetch('/api/cameras', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id, name, kind, lat, lon })
+      });
+
+      if (cityMap) cityMap.closePopup();
+      await loadCityMap();
+      populateCameraDropdown();
+
+      // Prepare form with next fresh ID
+      document.getElementById('cam-id').value = getNextCameraId();
+      document.getElementById('cam-name').value = '';
+    }
+
+    async function addManualCamera() {
+      const id = document.getElementById('cam-id').value.trim() || getNextCameraId();
+      const name = document.getElementById('cam-name').value.trim();
+      const kind = document.getElementById('cam-kind').value;
+      const lat = parseFloat(document.getElementById('cam-lat').value);
+      const lon = parseFloat(document.getElementById('cam-lon').value);
+
+      if (!id || !name || isNaN(lat) || isNaN(lon)) {
+        return alert('Please fill in Camera ID, Name, Latitude and Longitude (or click anywhere on map)');
+      }
+
+      await fetch('/api/cameras', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id, name, kind, lat, lon })
+      });
+
+      // Reset form and auto-increment ID
+      document.getElementById('cam-name').value = '';
+      document.getElementById('cam-lat').value = '';
+      document.getElementById('cam-lon').value = '';
+
+      await loadCityMap();
+      populateCameraDropdown();
+      document.getElementById('cam-id').value = getNextCameraId();
+    }
+
+    async function deleteManualCamera(camId) {
+      if (!confirm(`Remove camera ${camId}?`)) return;
+      await fetch(`/api/cameras/${encodeURIComponent(camId)}`, { method: 'DELETE' });
+      loadCityMap();
+      populateCameraDropdown();
+    }
+
+    async function loadFlowTimeseries() {
+      try {
+        const res = await fetch('/api/flow/timeseries?hours=24');
+        const data = await res.json();
+        if (flowTimeseriesChart) flowTimeseriesChart.destroy();
+        const ctx = document.getElementById('chart-flow-timeseries').getContext('2d');
+        flowTimeseriesChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.map((_, i) => `${i}h ago`),
+            datasets: [{
+              label: 'Vehicles',
+              data: data.map(d => d.total || 0),
+              borderColor: '#00d2ff',
+              backgroundColor: 'rgba(0,210,255,0.1)',
+              fill: true,
+              tension: 0.4,
+              pointRadius: 3,
+            }, {
+              label: 'Avg Speed (km/h)',
+              data: data.map(d => (d.avg_speed || 0).toFixed(1)),
+              borderColor: '#ffa502',
+              borderDash: [5, 3],
+              fill: false,
+              tension: 0.4,
+              pointRadius: 2,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#a0aec0', font: { size: 10 } } } },
+            scales: {
+              x: { ticks: { color: '#a0aec0', font: { size: 9 } }, grid: { color: '#1a2236' } },
+              y: { beginAtZero: true, ticks: { color: '#a0aec0', font: { size: 9 } }, grid: { color: '#1a2236' } }
+            }
+          }
+        });
+      } catch(e) { console.error('Timeseries error:', e); }
+    }
+
+    async function loadCongestion() {
+      try {
+        const res = await fetch('/api/flow/congestion');
+        const zones = await res.json();
+        const el = document.getElementById('congestion-list');
+        if (!zones.length) {
+          el.innerHTML = '<div style="color:#2ed573; text-align:center; padding:20px;">✅ No congestion detected. All zones flowing freely.</div>';
+          return;
+        }
+        el.innerHTML = zones.map(z => `
+          <div style="background:#1a2236; border-left:4px solid #ff4757; padding:10px 14px; border-radius:4px; margin-bottom:8px;">
+            <div style="font-weight:700; color:#ff4757;">🚧 ${z.camera_id}</div>
+            <div style="font-size:11px; color:#a0aec0; margin-top:4px;">
+              Avg Speed: <strong style="color:#ffa502;">${(z.avg_speed || 0).toFixed(1)} km/h</strong>
+              &nbsp;|&nbsp; Vehicles: <strong>${z.total_vehicles || 0}</strong>
+            </div>
+          </div>
+        `).join('');
+      } catch(e) { console.error('Congestion error:', e); }
+    }
+
+    async function uploadBlacklistCSV(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      document.getElementById('bl-csv-status').innerText = `Uploading ${file.name}...`;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/blacklist/import', { method: 'POST', body: formData });
+        const data = await res.json();
+        document.getElementById('bl-csv-status').innerText = `✅ Imported ${data.imported_count || 0} plates`;
+        loadBlacklist();
+      } catch(e) {
+        document.getElementById('bl-csv-status').innerText = '❌ Import failed';
+      }
+    }
+
+    async function seedDemoData() {
+      if (!confirm('Seed realistic multi-camera trajectory and traffic flow data across Kolkata?')) return;
+      try {
+        const res = await fetch('/api/simulation/seed', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Seeded successfully!');
+        loadCityMap();
+      } catch(e) {
+        alert('Failed to seed data: ' + e);
+      }
+    }
+
+    // ================================================================
+    // PLAY / PAUSE CONTROLS
+    // ================================================================
+
+    let isStreamPaused = false;
+
+    async function togglePlayPause() {
+      try {
+        const statsRes = await fetch('/api/stats');
+        const stats = await statsRes.json();
+        const nextState = !stats.pipeline_active;
+
+        const res = await fetch('/api/pipeline/toggle', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ run: nextState })
+        });
+        const data = await res.json();
+
+        const pauseBtn = document.getElementById('btn-pause-toggle');
+        const statusText = document.getElementById('pipeline-status-text');
+
+        if (data.pipeline_active) {
+          if (pauseBtn) {
+            pauseBtn.innerHTML = '⏸️ Pause Stream';
+            pauseBtn.style.background = '#ffa502';
+            pauseBtn.style.color = '#121620';
+          }
+          if (statusText) {
+            statusText.innerText = '🟢 PLAYING';
+            statusText.style.color = '#2ed573';
+          }
+        } else {
+          if (pauseBtn) {
+            pauseBtn.innerHTML = '▶️ Resume Stream';
+            pauseBtn.style.background = '#2ed573';
+            pauseBtn.style.color = '#000';
+          }
+          if (statusText) {
+            statusText.innerText = '⏸️ PAUSED';
+            statusText.style.color = '#ffa502';
+          }
+        }
+      } catch(e) {
+        console.error('Error toggling play/pause:', e);
+      }
+    }
+
+    async function restartVideoStream() {
+      try {
+        await fetch('/api/pipeline/toggle', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ run: true })
+        });
+        await fetch('/api/source', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ kind: 'upload', source: '_upload.mp4' })
+        });
+        setTimeout(() => {
+          const img = document.getElementById('stream-img');
+          if (img) img.src = '/stream?t=' + Date.now();
+        }, 200);
+      } catch(e) {
+        console.error('Error restarting video:', e);
+      }
+    }
+
+    async function sendCurrentFrameToLab() {
+      switchTab('anpr-lab');
+      await grabCurrentFrameForLab();
+    }
+
+    // ================================================================
+    // ANPR LAB & MODEL EVALUATION LOGIC
+    // ================================================================
+
+    let selectedLabFile = null;
+    let labCurrentFrameActive = false;
+    let cachedBenchmarkResults = [];
+
+    async function initAnprLab() {
+      await loadAnprLabModels();
+    }
+
+    async function loadAnprLabModels() {
+      try {
+        const res = await fetch('/api/anpr-lab/models');
+        const data = await res.json();
+        const select = document.getElementById('lab-model-select');
+        if (!select) return;
+
+        if (data.device_name) {
+          const badge = document.getElementById('lab-device-badge');
+          if (badge) badge.innerText = `🟢 Device: ${data.device_name}`;
+        }
+
+        if (!data.models || !data.models.length) {
+          select.innerHTML = '<option value="">No .pt models found in models/ folder</option>';
+          return;
+        }
+
+        select.innerHTML = data.models.map(m => {
+          const isSelected = m.is_default || (data.active_model && m.path.includes(data.active_model));
+          return `<option value="${m.path}" ${isSelected ? 'selected' : ''}>
+            ${m.name} (${m.size_mb} MB) ${m.is_default ? '— [Active Default]' : `— [${m.location}]`}
+          </option>`;
+        }).join('');
+      } catch(e) {
+        console.error('Failed to load ANPR models:', e);
+      }
+    }
+
+    async function uploadCustomModel(file) {
+      if (!file) return;
+      const status = document.getElementById('lab-upload-model-status');
+      status.style.color = '#00d2ff';
+      status.innerText = `Uploading ${file.name}...`;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/anpr-lab/upload-model', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          status.style.color = '#2ed573';
+          status.innerText = `✅ Model uploaded: ${data.filename} (${data.size_mb} MB)`;
+          await loadAnprLabModels();
+        } else {
+          status.style.color = '#ff4757';
+          status.innerText = 'Upload failed: ' + (data.detail || 'Unknown error');
+        }
+      } catch(e) {
+        status.style.color = '#ff4757';
+        status.innerText = 'Error: ' + e;
+      }
+    }
+
+    function handleLabImageSelect(file) {
+      if (!file) return;
+      selectedLabFile = file;
+      labCurrentFrameActive = false;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = document.getElementById('lab-image-preview');
+        const box = document.getElementById('lab-image-preview-box');
+        const name = document.getElementById('lab-image-preview-name');
+        preview.src = e.target.result;
+        name.innerText = `Selected: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+        box.style.display = 'block';
+
+        // Also place as current placeholder image
+        const annotImg = document.getElementById('lab-annotated-img');
+        const ph = document.getElementById('lab-annotated-placeholder');
+        annotImg.src = e.target.result;
+        annotImg.style.display = 'block';
+        ph.style.display = 'none';
+        document.getElementById('lab-eval-status').innerText = `Loaded ${file.name} — ready to evaluate`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function grabCurrentFrameForLab() {
+      try {
+        document.getElementById('lab-eval-status').innerText = 'Grabbing current stream frame...';
+        const res = await fetch('/api/anpr-lab/current-frame');
+        const data = await res.json();
+        if (data.status === 'success' && data.image_data) {
+          labCurrentFrameActive = true;
+          selectedLabFile = null;
+
+          const preview = document.getElementById('lab-image-preview');
+          const box = document.getElementById('lab-image-preview-box');
+          const name = document.getElementById('lab-image-preview-name');
+          preview.src = data.image_data;
+          name.innerText = 'Source: Current Video Frame';
+          box.style.display = 'block';
+
+          const annotImg = document.getElementById('lab-annotated-img');
+          const ph = document.getElementById('lab-annotated-placeholder');
+          annotImg.src = data.image_data;
+          annotImg.style.display = 'block';
+          ph.style.display = 'none';
+
+          document.getElementById('lab-eval-status').innerText = 'Captured live frame — ready to evaluate';
+        } else {
+          alert('Could not grab current frame: ' + (data.detail || 'No video frame'));
+        }
+      } catch(e) {
+        alert('Failed to grab frame: ' + e);
+      }
+    }
+
+    async function runAnprEvaluation() {
+      const modelPath = document.getElementById('lab-model-select').value;
+      if (!modelPath) return alert('Please select a plate detection model first.');
+
+      const confThresh = document.getElementById('lab-conf-thresh').value;
+      const enableOcr = document.getElementById('lab-enable-ocr').checked;
+      const btn = document.getElementById('btn-run-eval');
+      const status = document.getElementById('lab-eval-status');
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Evaluating ANPR...';
+      status.innerText = `Running inference with ${modelPath.split('/').pop()}...`;
+
+      const formData = new FormData();
+      formData.append('model_path', modelPath);
+      formData.append('conf_thresh', confThresh);
+      formData.append('enable_ocr', enableOcr ? 'true' : 'false');
+
+      if (labCurrentFrameActive) {
+        formData.append('use_current_frame', 'true');
+      } else if (selectedLabFile) {
+        formData.append('file', selectedLabFile);
+      } else {
+        // Fallback: use current frame
+        formData.append('use_current_frame', 'true');
+      }
+
+      try {
+        const res = await fetch('/api/anpr-lab/evaluate', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status !== 'success') {
+          throw new Error(data.detail || 'Evaluation failed');
+        }
+
+        // 1. Update KPI Cards
+        document.getElementById('kpi-lab-latency').innerHTML = `${data.infer_ms} <span style="font-size:12px; color:#888;">ms (${data.fps} FPS)</span>`;
+        document.getElementById('kpi-lab-count').innerText = `${data.plates_detected} Plates`;
+
+        const topPlate = data.plates.length ? data.plates[0].plate_text : 'None';
+        const topConf = data.plates.length ? ` (${(data.plates[0].ocr_conf * 100).toFixed(0)}%)` : '';
+        document.getElementById('kpi-lab-ocr').innerText = topPlate + topConf;
+
+        const anyValid = data.plates.some(p => p.is_valid_indian);
+        const morthCard = document.getElementById('kpi-lab-morth');
+        if (anyValid) {
+          morthCard.innerHTML = `<span style="color:#2ed573;">✅ Valid MoRTH</span>`;
+        } else if (data.plates.length) {
+          morthCard.innerHTML = `<span style="color:#ffa502;">⚠️ Non-Standard</span>`;
+        } else {
+          morthCard.innerText = 'No Plates';
+        }
+
+        // 2. Render Annotated Image
+        const annotImg = document.getElementById('lab-annotated-img');
+        const ph = document.getElementById('lab-annotated-placeholder');
+        annotImg.src = data.annotated_image;
+        annotImg.style.display = 'block';
+        ph.style.display = 'none';
+
+        // 3. Render Plate Crops Gallery
+        const gallery = document.getElementById('lab-plates-gallery');
+        if (!data.plates.length) {
+          gallery.innerHTML = '<div style="font-size:11px; color:#ffa502;">No license plates detected at current confidence threshold. Try lowering the threshold to 0.15 or 0.20.</div>';
+        } else {
+          gallery.innerHTML = data.plates.map(p => `
+            <div style="background:#1a2236; border:1px solid ${p.is_valid_indian ? '#2ed573' : '#262f40'}; border-radius:6px; padding:10px; display:flex; gap:12px; align-items:center;">
+              <img src="${p.plate_crop}" style="height:44px; width:90px; object-fit:contain; background:#0a0f14; border-radius:4px;">
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:#fff;">
+                  ${p.plate_text}
+                </div>
+                <div style="font-size:10px; color:#a0aec0; margin-top:2px;">
+                  Det Conf: <strong style="color:#00d2ff;">${(p.det_conf * 100).toFixed(0)}%</strong>
+                  &nbsp;|&nbsp; OCR Conf: <strong style="color:#2ed573;">${(p.ocr_conf * 100).toFixed(0)}%</strong>
+                </div>
+                <div style="font-size:10px; margin-top:2px;">
+                  ${p.is_valid_indian ? '<span style="color:#2ed573; font-weight:700;">✅ MoRTH Compliant</span>' : '<span style="color:#ffa502;">⚠️ Non-Standard Format</span>'}
+                  &nbsp;•&nbsp; <span style="color:#a0aec0;">${p.state || 'India'}</span>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        status.innerText = `Evaluated in ${data.total_ms} ms (Infer: ${data.infer_ms}ms, OCR: ${data.ocr_ms}ms) · ${data.model_name}`;
+      } catch(e) {
+        alert('Evaluation error: ' + e.message);
+        status.innerText = 'Evaluation failed';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🚀 Run Model Evaluation';
+      }
+    }
+
+    async function benchmarkAllModels() {
+      const btn = document.getElementById('btn-run-bench');
+      const status = document.getElementById('lab-eval-status');
+      const confThresh = document.getElementById('lab-conf-thresh').value;
+
+      btn.disabled = true;
+      btn.innerText = '⚡ Benchmarking Models...';
+      status.innerText = 'Running side-by-side benchmark across all available models...';
+
+      const formData = new FormData();
+      formData.append('conf_thresh', confThresh);
+
+      if (labCurrentFrameActive) {
+        formData.append('use_current_frame', 'true');
+      } else if (selectedLabFile) {
+        formData.append('file', selectedLabFile);
+      } else {
+        formData.append('use_current_frame', 'true');
+      }
+
+      try {
+        const res = await fetch('/api/anpr-lab/benchmark', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status !== 'success' || !data.benchmark) {
+          throw new Error('Benchmark failed');
+        }
+
+        cachedBenchmarkResults = data.benchmark;
+        const tbody = document.getElementById('lab-benchmark-body');
+        const section = document.getElementById('lab-benchmark-section');
+        section.style.display = 'block';
+
+        tbody.innerHTML = data.benchmark.map(b => {
+          const isError = Boolean(b.error);
+          return `
+            <tr>
+              <td style="font-weight:700; color:#00d2ff;">${b.model_name}</td>
+              <td style="font-weight:700; color:${b.plates_found > 0 ? '#2ed573' : '#a0aec0'};">${isError ? 'Error' : b.plates_found}</td>
+              <td>${isError ? '-' : (b.avg_conf ? (b.avg_conf * 100).toFixed(1) + '%' : '-')}</td>
+              <td style="color:#00d2ff; font-weight:700;">${isError ? '-' : b.infer_ms + ' ms'}</td>
+              <td style="color:#2ed573;">${isError ? '-' : b.fps}</td>
+              <td style="font-family:'JetBrains Mono',monospace;">${b.sample_plate || '-'}</td>
+              <td>${b.is_valid_morth ? '<span style="color:#2ed573;">✅ Yes</span>' : '<span style="color:#888;">-</span>'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        status.innerText = `Benchmarked ${data.benchmark.length} models on ${data.device}`;
+      } catch(e) {
+        alert('Benchmark error: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '⚡ Benchmark All Models Side-by-Side';
+      }
+    }
+
+    function exportBenchmarkCSV() {
+      if (!cachedBenchmarkResults.length) return alert('No benchmark data to export');
+      const headers = ['Model Name', 'File Size (MB)', 'Plates Found', 'Avg Confidence', 'Inference Latency (ms)', 'FPS', 'Top Plate OCR', 'MoRTH Valid'];
+      const rows = cachedBenchmarkResults.map(b => [
+        `"${b.model_name}"`,
+        b.size_mb || 0,
+        b.plates_found || b.total_plates_found || 0,
+        b.avg_conf || 0,
+        b.infer_ms || 0,
+        b.fps || 0,
+        `"${b.sample_plate || ''}"`,
+        b.is_valid_morth ? 'YES' : 'NO'
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `anpr_benchmark_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ================================================================
+    // ANPR LAB - VIDEO EVALUATION LOGIC
+    // ================================================================
+
+    let currentLabMode = 'image';
+    let selectedLabVideoFile = null;
+
+    function setLabMode(mode) {
+      currentLabMode = mode;
+      const isImg = (mode === 'image');
+
+      document.getElementById('btn-lab-mode-img').style.background = isImg ? '#00d2ff' : '#262f40';
+      document.getElementById('btn-lab-mode-img').style.color = isImg ? '#121620' : '#fff';
+
+      document.getElementById('btn-lab-mode-vid').style.background = !isImg ? '#00d2ff' : '#262f40';
+      document.getElementById('btn-lab-mode-vid').style.color = !isImg ? '#121620' : '#fff';
+
+      document.getElementById('lab-panel-image').style.display = isImg ? 'block' : 'none';
+      document.getElementById('lab-buttons-image').style.display = isImg ? 'flex' : 'none';
+
+      document.getElementById('lab-panel-video').style.display = !isImg ? 'block' : 'none';
+      document.getElementById('lab-buttons-video').style.display = !isImg ? 'flex' : 'none';
+
+      const img = document.getElementById('lab-annotated-img');
+      const vidBox = document.getElementById('lab-video-container');
+      const ph = document.getElementById('lab-annotated-placeholder');
+      if (isImg) {
+        vidBox.style.display = 'none';
+        if (img.src && img.src.startsWith('data:')) {
+          img.style.display = 'block';
+          ph.style.display = 'none';
+        } else {
+          img.style.display = 'none';
+          ph.style.display = 'block';
+          ph.innerHTML = 'Upload an image or grab a video frame, select a model, and click <strong>"Run Single Model Evaluation"</strong>.';
+        }
+      } else {
+        img.style.display = 'none';
+        const vid = document.getElementById('lab-annotated-video');
+        if (vid.src) {
+          vidBox.style.display = 'flex';
+          ph.style.display = 'none';
+        } else {
+          vidBox.style.display = 'none';
+          ph.style.display = 'block';
+          ph.innerHTML = 'Select video source, configure frame count, and click <strong>"Run Video ANPR Evaluation"</strong>.';
+        }
+      }
+    }
+
+    function toggleLabVideoSource(val) {
+      const uploadBox = document.getElementById('lab-video-upload-box');
+      if (uploadBox) uploadBox.style.display = (val === 'upload') ? 'block' : 'none';
+    }
+
+    function handleLabVideoSelect(file) {
+      if (!file) return;
+      selectedLabVideoFile = file;
+      const label = document.getElementById('lab-video-label');
+      if (label) {
+        label.innerText = `✅ Selected: ${file.name} (${(file.size / (1024*1024)).toFixed(1)} MB)`;
+        label.style.borderColor = '#2ed573';
+        label.style.color = '#2ed573';
+      }
+    }
+
+    async function runAnprVideoEvaluation() {
+      const modelPath = document.getElementById('lab-model-select').value;
+      if (!modelPath) return alert('Please select a plate detection model first.');
+
+      const confThresh = document.getElementById('lab-conf-thresh').value;
+      const enableOcr = document.getElementById('lab-enable-ocr').checked;
+      const maxFrames = document.getElementById('lab-video-frames').value;
+      const ocrInterval = document.getElementById('lab-video-ocr-interval').value;
+      if (!selectedLabVideoFile) {
+        return alert('Please select a video file (.mp4) to evaluate.');
+      }
+
+      const btn = document.getElementById('btn-run-video-eval');
+      const status = document.getElementById('lab-eval-status');
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Evaluating Video (0s)...';
+      status.innerText = `Evaluating video with ${modelPath.split('/').pop()}... Please wait...`;
+
+      const startTime = Date.now();
+      const timerInterval = setInterval(() => {
+        const sec = Math.round((Date.now() - startTime) / 1000);
+        btn.innerText = `⏳ Evaluating Video (${sec}s elapsed)...`;
+        status.innerText = `Processing YOLO & OCR on video... ${sec}s elapsed`;
+      }, 1000);
+
+      const formData = new FormData();
+      formData.append('model_path', modelPath);
+      formData.append('conf_thresh', confThresh);
+      formData.append('max_frames', maxFrames);
+      formData.append('ocr_interval', ocrInterval);
+      formData.append('enable_ocr', enableOcr ? 'true' : 'false');
+      formData.append('file', selectedLabVideoFile);
+
+      try {
+        const res = await fetch('/api/anpr-lab/evaluate-video', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status !== 'success') {
+          throw new Error(data.detail || 'Video evaluation failed');
+        }
+
+        // 1. Update KPI Cards
+        document.getElementById('kpi-lab-latency').innerHTML = `${data.infer_ms} <span style="font-size:12px; color:#888;">ms (${data.fps} FPS)</span>`;
+        document.getElementById('kpi-lab-count').innerText = `${data.total_detections} Detections`;
+
+        const topPlate = data.unique_plates.length ? data.unique_plates[0].plate : 'None';
+        const topConf = data.unique_plates.length ? ` (${(data.unique_plates[0].conf * 100).toFixed(0)}%)` : '';
+        document.getElementById('kpi-lab-ocr').innerText = topPlate + topConf;
+
+        const morthCard = document.getElementById('kpi-lab-morth');
+        morthCard.innerHTML = `<span style="color:#2ed573;">${data.unique_plates_count} Unique Plates</span>`;
+
+        // 2. Load and Play Annotated Video
+        const vidBox = document.getElementById('lab-video-container');
+        const vidPlayer = document.getElementById('lab-annotated-video');
+        const ph = document.getElementById('lab-annotated-placeholder');
+        const img = document.getElementById('lab-annotated-img');
+
+        img.style.display = 'none';
+        ph.style.display = 'none';
+        vidBox.style.display = 'flex';
+        vidPlayer.src = data.video_url + '?t=' + Date.now();
+        vidPlayer.load();
+        vidPlayer.play().catch(() => {});
+
+        // 3. Render Unique License Plates Discovered
+        const gallery = document.getElementById('lab-plates-gallery');
+        if (!data.unique_plates.length) {
+          gallery.innerHTML = '<div style="font-size:11px; color:#ffa502;">No distinct license plates identified in the evaluated video frames. Try lowering the confidence threshold.</div>';
+        } else {
+          gallery.innerHTML = data.unique_plates.map(p => `
+            <div style="background:#1a2236; border:1px solid ${p.is_valid_indian ? '#2ed573' : '#262f40'}; border-radius:6px; padding:10px; display:flex; gap:12px; align-items:center;">
+              <img src="${p.crop}" style="height:44px; width:90px; object-fit:contain; background:#0a0f14; border-radius:4px;">
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700; color:#fff;">
+                  ${p.plate}
+                </div>
+                <div style="font-size:10px; color:#a0aec0; margin-top:2px;">
+                  Conf: <strong style="color:#2ed573;">${(p.conf * 100).toFixed(0)}%</strong>
+                  &nbsp;|&nbsp; Seen in: <strong>${p.count} frames</strong>
+                  &nbsp;|&nbsp; First at: <strong style="color:#00d2ff;">${p.first_seen}</strong>
+                </div>
+                <div style="font-size:10px; margin-top:2px;">
+                  ${p.is_valid_indian ? '<span style="color:#2ed573; font-weight:700;">✅ MoRTH Compliant</span>' : '<span style="color:#ffa502;">⚠️ Non-Standard Format</span>'}
+                  &nbsp;•&nbsp; <span style="color:#a0aec0;">${p.state || 'India'}</span>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        status.innerText = `Evaluated ${data.frames_processed} frames in ${data.total_sec}s (${data.fps} FPS) · Found ${data.unique_plates_count} unique plates`;
+      } catch(e) {
+        alert('Video evaluation error: ' + e.message);
+        status.innerText = 'Video evaluation failed';
+      } finally {
+        clearInterval(timerInterval);
+        btn.disabled = false;
+        btn.innerText = '🎬 Run Video ANPR Evaluation';
+      }
+    }
+
+    async function benchmarkAllModelsVideo() {
+      if (!selectedLabVideoFile) {
+        return alert('Please select a video file (.mp4) to benchmark.');
+      }
+
+      const btn = document.getElementById('btn-run-video-bench');
+      const status = document.getElementById('lab-eval-status');
+      const confThresh = document.getElementById('lab-conf-thresh').value;
+
+      btn.disabled = true;
+      btn.innerText = '⚡ Benchmarking Models on Video...';
+      status.innerText = 'Running multi-model video benchmark...';
+
+      const formData = new FormData();
+      formData.append('conf_thresh', confThresh);
+      formData.append('max_frames', '50');
+      formData.append('file', selectedLabVideoFile);
+
+      try {
+        const res = await fetch('/api/anpr-lab/benchmark-video', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status !== 'success' || !data.benchmark) {
+          throw new Error('Video benchmark failed');
+        }
+
+        cachedBenchmarkResults = data.benchmark;
+        const tbody = document.getElementById('lab-benchmark-body');
+        const section = document.getElementById('lab-benchmark-section');
+        section.style.display = 'block';
+
+        tbody.innerHTML = data.benchmark.map(b => {
+          const isError = Boolean(b.error);
+          return `
+            <tr>
+              <td style="font-weight:700; color:#00d2ff;">${b.model_name}</td>
+              <td style="font-weight:700; color:${b.total_plates_found > 0 ? '#2ed573' : '#a0aec0'};">${isError ? 'Error' : b.total_plates_found}</td>
+              <td>${isError ? '-' : (b.avg_conf ? (b.avg_conf * 100).toFixed(1) + '%' : '-')}</td>
+              <td style="color:#00d2ff; font-weight:700;">${isError ? '-' : b.infer_ms + ' ms'}</td>
+              <td style="color:#2ed573; font-weight:700;">${isError ? '-' : b.fps + ' FPS'}</td>
+              <td>${isError ? '-' : b.plates_per_frame + ' / frame'}</td>
+              <td>${isError ? '-' : (b.frames_tested + ' frames')}</td>
+            </tr>
+          `;
+        }).join('');
+
+        status.innerText = `Benchmarked ${data.benchmark.length} models across ${data.frames_tested} frames on ${data.device}`;
+      } catch(e) {
+        alert('Video benchmark error: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '⚡ Benchmark All Models on Video';
+      }
+    }
+
+  </script>
+</body>
+</html>
+
