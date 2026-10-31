@@ -1,0 +1,115 @@
+# ==============================================================================
+# Byte-compiled / optimized / DLL files
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==============================================================================
+# Virtual Environments & Dependencies
+# ==============================================================================
+.venv/
+venv/
+ENV/
+env/
+ENV.bak/
+env.bak/
+.conda/
+node_modules/
+.pnpm-store/
+
+
+# ==============================================================================
+# Deep Learning Models & Weights (Heavy binary files)
+# ==============================================================================
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+*.bin
+*.xml
+*_openvino_model/
+*_ncnn_model/
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.bin
+models/*.xml
+yolov8n.pt
+
+# ==============================================================================
+# Runtime Database & Evidence Artifacts
+# ==============================================================================
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+trafficsentinel.db*
+evidence/*
+!evidence/.gitkeep
+evidence/crops/
+evidence/clips/
+runs/
+
+# ==============================================================================
+# Media & Video Files (Large video uploads and test recordings)
+# ==============================================================================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+_upload.mp4
+test_*.mp4
+
+# ==============================================================================
+# Local Machine Configurations & Logs
+# ==============================================================================
+camera.json
+*.log
+*.tmp
+test_debug.py
+test_anpr.py
+test_cv2.py
+test_image.py
+test_*.jpg
+test_*.png
+
+# ==============================================================================
+# IDEs, Editors & OS Files
+# ==============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# System & IDE Assistant Data
+# ==============================================================================
+.agents/
+.gemini/
+.system_generated/
+.user_uploaded/
